@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+
+# 测试产物与标定参考（不随仓库分发）
+tests/output/
+tests/reference_luts/
+
+# luts/ 只随仓库分发 6 个 MIT 参考 LUT，其余用户自备文件不入库
+luts/*
+!luts/.gitkeep
+!luts/16mm_reversal_vintage.cube
+!luts/faded_film_aged.cube
+!luts/fuji_eterna_250d.cube
+!luts/kodak_ektachrome_100d.cube
+!luts/kodak_trix_400_bw.cube
+!luts/kodak_vision3_500t.cube

@@ -1,0 +1,9 @@
+torch
+numpy
+Pillow
+
+# 注意：silvergrain 库（FilmLook 胶片颗粒节点依赖）需要手动安装：
+#   pip install silvergrain[gpu]
+# 说明：需要 NVIDIA CUDA 显卡才有实用速度（CPU 渲染 1024x1024 约 159 秒）；
+# silvergrain 采用 AGPLv3 开源协议，商用前请确认协议合规。
+# 未安装时其余节点（调色 / LUT / 光晕）不受影响，可正常使用。
