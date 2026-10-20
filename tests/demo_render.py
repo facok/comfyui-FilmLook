@@ -58,6 +58,6 @@ node = mod.FilmLookOneClick()
 presets = ["清新人像 (Portra 400)", "日系空气感 (Fuji 400H)", "暖阳金调 (Kodak Gold)",
            "冷调电影感 (Vision3 500T)", "浓郁鲜艳 (Ektar)", "黑白纪实 (Tri-X)"]
 for i, p in enumerate(presets):
-    out = node.execute(scene, p, "标准 (ISO 400)", 0.85, 0.4, True, 0.3, 1.0, 42)[0]
+    out = node.execute(scene, p, "标准 (ISO 400)", 0.85, 0.4, True, 0.3, 1.0, 0.2, 0.2, 42)[0]
     save(out, f"{i+1:02d}_{p.split(' ')[0]}.png")
 print("DONE")

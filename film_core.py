@@ -242,6 +242,39 @@ def apply_halation(image, *, strength=0.5, scales=(0.01, 0.02), auto_threshold=T
     return _join_alpha(out, alpha)
 
 
+def apply_diffusion(image, *, strength=0.2):
+    """柔光（黑柔镜效果）：高光低阈值软膝提取 → 高斯模糊 → 中性滤色叠加。
+    与 halation 的区别：不着色、阈值更低、作用更弥散，压低微反差带来柔焦感。"""
+    if strength <= 0.0:
+        return image
+    image = image.float()
+    rgb, alpha = split_alpha(image)
+    lin = srgb_to_linear(rgb.clamp(0.0, 1.0))
+    lum = luminance(lin)
+    mask = smoothstep(0.25, 0.75, lum)
+    hi = lin * mask
+    height = image.shape[1]
+    glow = (_gaussian_blur(hi, 0.012 * height) + 0.5 * _gaussian_blur(hi, 0.03 * height)) / 1.5
+    out = 1.0 - (1.0 - lin) * (1.0 - (glow * float(strength)).clamp(0.0, 1.0))
+    out = linear_to_srgb(out).clamp(0.0, 1.0)
+    return _join_alpha(out, alpha)
+
+
+def apply_vignette(image, *, strength=0.25):
+    """暗角：以画面中心为圆心的径向压暗，线性域乘法，形状固定只需一个强度。"""
+    if strength <= 0.0:
+        return image
+    image = image.float()
+    rgb, alpha = split_alpha(image)
+    b, h, w, _ = image.shape
+    ys = torch.linspace(-1.0, 1.0, h, device=image.device, dtype=image.dtype).view(1, h, 1, 1)
+    xs = torch.linspace(-1.0, 1.0, w, device=image.device, dtype=image.dtype).view(1, 1, w, 1)
+    dist = (xs * xs + ys * ys).sqrt() / math.sqrt(2.0)  # 中心 0，四角 1
+    falloff = 1.0 - float(strength) * smoothstep(0.45, 1.0, dist)
+    lin = srgb_to_linear(rgb.clamp(0.0, 1.0)) * falloff
+    return _join_alpha(linear_to_srgb(lin).clamp(0.0, 1.0), alpha)
+
+
 def parse_cube(path):
     """解析 .cube 文件，支持 LUT_1D_SIZE / LUT_3D_SIZE、TITLE、DOMAIN_MIN/MAX、# 注释。"""
     if not os.path.isfile(path):

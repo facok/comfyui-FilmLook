@@ -5,12 +5,14 @@ from .color_nodes import FilmLookColor, FilmLookLUT
 from .combo_nodes import FilmLookOneClick
 from .grain_nodes import FilmLookGrain
 from .halation_nodes import FilmLookHalation
+from .lens_nodes import FilmLookLens
 
 NODE_CLASS_MAPPINGS = {
     "FilmLook_Color": FilmLookColor,
     "FilmLook_LUT": FilmLookLUT,
     "FilmLook_Halation": FilmLookHalation,
     "FilmLook_Grain": FilmLookGrain,
+    "FilmLook_Lens": FilmLookLens,
     "FilmLook_OneClick": FilmLookOneClick,
 }
 
@@ -19,6 +21,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FilmLook_LUT": "FilmLook LUT 应用",
     "FilmLook_Halation": "FilmLook 光晕 (Halation)",
     "FilmLook_Grain": "FilmLook 胶片颗粒",
+    "FilmLook_Lens": "FilmLook 镜头质感",
     "FilmLook_OneClick": "FilmLook 一键胶片",
 }
 

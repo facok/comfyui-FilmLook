@@ -11,6 +11,7 @@
 | FilmLook 胶片调色 | FilmLook/色彩 | 7 种胶片预设 + 亮度/对比度/饱和度/色温/色调手动微调 |
 | FilmLook LUT 应用 | FilmLook/色彩 | 应用 `.cube` 或 HaldCLUT `.png` LUT 文件，可自定义路径 |
 | FilmLook 光晕 (Halation) | FilmLook/光学 | 高光周围的红橙色雾圈，胶片标志性光学效果 |
+| FilmLook 镜头质感 | FilmLook/光学 | 柔光（黑柔镜感）+ 暗角，两个滑杆 |
 | FilmLook 胶片颗粒 | FilmLook/颗粒 | 基于 silvergrain 的物理银盐颗粒（非普通噪点） |
 | FilmLook 一键胶片 | FilmLook | 调色 + 光晕 + 颗粒一次完成 |
 
@@ -110,6 +111,8 @@
 | auto_exposure | 开 | 智能曝光（含高光保护）；画面过曝时可关闭 |
 | preserve_luminance | 0.5 | 亮度保持：0 自由改变亮度，1 亮度完全贴回原图；遇到过曝时调高 |
 | style_boost | 1.0 | 风格浓度：1 为忠实胶片效果，>1 把风格放大到超出真实胶片 |
+| diffusion | 0.2 | 柔光强度：高光弥散的柔焦感（黑柔镜效果），0 关闭 |
+| vignette | 0.2 | 暗角强度：四角向中心压暗，0 关闭 |
 | seed | 0 | 随机种子 |
 
 ## 常见问题

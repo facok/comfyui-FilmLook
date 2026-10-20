@@ -181,6 +181,19 @@ def main():
     check("Halation[手动阈值]", node.execute(img, 0.8, "标准", False, 0.5)[0], img)
     check("Halation[批次x2]", node.execute(batch, 0.5, "标准", True, 0.85)[0], batch)
 
+    print("[2b] FilmLookLens（柔光/暗角/关闭）")
+    node = mod.FilmLookLens()
+    check("Lens[默认]", node.execute(img, 0.25, 0.25)[0], img)
+    assert torch.equal(node.execute(img, 0.0, 0.0)[0], img), "Lens 全关应严格返回原图"
+    print("  PASS Lens[全关恒等]")
+    dark = node.execute(img, 0.0, 0.8)[0]
+    assert float(dark[0, 5, 5].mean()) < float(img[0, 5, 5].mean()), "暗角应压暗边角"
+    assert abs(float(dark[0, 128, 128].mean()) - float(img[0, 128, 128].mean())) < 0.02, "暗角不应影响中心"
+    print("  PASS Lens[暗角只压边角]")
+    glow = node.execute(img, 0.8, 0.0)[0]
+    assert float(glow[0, 128, 128].mean()) > float(img[0, 128, 128].mean()), "柔光应提亮高光区周围"
+    print("  PASS Lens[柔光提亮高光周围]")
+
     print("[3] FilmLookLUT（3D 恒等 / 3D 纯灰 / 1D 曲线 / 错误路径）")
     node = mod.FilmLookLUT()
     luts = mod.FilmLookLUT.INPUT_TYPES()["required"]["lut"][0]
@@ -232,10 +245,10 @@ def main():
     print("[5] FilmLookOneClick")
     node = mod.FilmLookOneClick()
     if has_sg:
-        check("OneClick", node.execute(img, "清新人像 (Portra 400)", "极细 (ISO 100)", 0.85, 0.4, True, 0.3, 1.0, 0)[0], img)
+        check("OneClick", node.execute(img, "清新人像 (Portra 400)", "极细 (ISO 100)", 0.85, 0.4, True, 0.3, 1.0, 0.2, 0.2, 0)[0], img)
     else:
         try:
-            node.execute(img, "清新人像 (Portra 400)", "标准 (ISO 400)", 0.85, 0.4, True, 0.3, 1.0, 0)
+            node.execute(img, "清新人像 (Portra 400)", "标准 (ISO 400)", 0.85, 0.4, True, 0.3, 1.0, 0.2, 0.2, 0)
             raise AssertionError("未安装 silvergrain 时一键节点应报 RuntimeError")
         except RuntimeError as e:
             assert "silvergrain" in str(e)
