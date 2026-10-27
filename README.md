@@ -125,7 +125,7 @@ D:\ComfyUI_windows_portable\python_embeded\python.exe -m pip install silvergrain
 没有 NVIDIA 显卡可以装 CPU 版（`pip install silvergrain`），但非常慢，请做好心理准备。
 
 **Q：LUT 下拉框里没有我的文件？**
-A：确认文件扩展名是 `.cube` 或 `.png`（HaldCLUT）、放在插件的 `luts/` 文件夹里，然后重启 ComfyUI（或刷新节点定义）。16-bit HaldCLUT 只支持非隔行扫描的 RGB/RGBA PNG。
+A：确认文件扩展名是 `.cube` 或 `.png`（HaldCLUT）、放在插件的 `luts/` 文件夹里，然后重启 ComfyUI（或刷新节点定义）。16-bit HaldCLUT 只支持非隔行扫描的 RGB/RGBA PNG。16-bit HaldCLUT 首次加载较慢（12 级 1728² 约 10 秒），解析结果会按文件修改时间缓存，之后再次使用是瞬时的。
 
 **Q：颗粒在视频批次里每帧都一样吗？**
 A：不会。每一帧都用 `seed` 与帧号派生出的独立种子重新渲染（第 N 帧的种子由 `seed` 和 `N` 雪崩混合而来，不是简单相加——silvergrain 的图案对相邻种子只是平移一个 cell，直接相加会得到几乎同一张图），彩色颗粒模式下三个通道也各用独立种子，符合真实胶片颗粒"时间独立"的特性。

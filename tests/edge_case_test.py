@@ -119,5 +119,27 @@ for preset in ("清新人像 (Portra 400)", "黑白纪实 (Tri-X)", "自定义")
             bad.append((preset, type(e).__name__, str(e)[:40]))
 check(f"{combos} 组极端组合无 NaN / 越界", not bad, str(bad[:3]))
 
+print("[7] LUT 解析缓存：命中要快、文件变了要失效")
+import shutil  # noqa: E402
+import time  # noqa: E402
+
+src = PKG_DIR / "luts" / "kodak_vision3_500t.cube"
+if src.is_file():
+    tmp_cube = pathlib.Path(tempfile.mkdtemp()) / "cache_probe.cube"
+    shutil.copy(src, tmp_cube)
+    t0 = time.perf_counter()
+    first = fc.parse_cube(str(tmp_cube))
+    t_first = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    second = fc.parse_cube(str(tmp_cube))
+    t_second = time.perf_counter() - t0
+    check("重复解析返回同一对象", first is second, f"{t_first * 1000:.2f}ms → {t_second * 1000:.3f}ms")
+    check("缓存命中显著更快", t_second < max(t_first * 0.2, 1e-4),
+          f"{t_first * 1000:.2f}ms → {t_second * 1000:.3f}ms")
+    time.sleep(0.02)
+    tmp_cube.write_text("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n", encoding="ascii")
+    check("文件改动后缓存失效", fc.parse_cube(str(tmp_cube))["size"] == 2,
+          f"size {first['size']} → 2")
+
 print("\n" + ("全部边界测试通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """FilmLook 共享数学：色彩空间转换、特性曲线、串扰矩阵、分离色调、halation、.cube 解析。"""
 
+import collections
 import math
 import os
 import struct
@@ -320,8 +321,47 @@ def apply_vignette(image, *, strength=0.25):
     return _join_alpha(linear_to_srgb(lin).clamp(0.0, 1.0), alpha)
 
 
+def _lut_bytes(lut):
+    table = lut["table"]
+    return table.numel() * table.element_size()
+
+
+_LUT_CACHE = collections.OrderedDict()   # (绝对路径, mtime_ns, 文件大小) → parsed
+_LUT_CACHE_MAX_BYTES = 256 * 2 ** 20
+_LUT_CACHE_MAX_ENTRIES = 8
+
+
+def _cached_parse(path, parser):
+    """按 (绝对路径, mtime, 文件大小) 缓存 LUT 解析结果。
+
+    .cube 解析只要几毫秒，但 16-bit HaldCLUT 的 PNG 反滤波是逐字节 Python 循环：
+    1728² 约 12 秒、4096² 约 67 秒，不缓存等于每出一张图就重付一遍。文件被替换时
+    mtime/size 会变化，缓存自动失效；总字节数超预算时按 LRU 淘汰，避免大 LUT 撑爆内存。
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return parser(path)  # 交给 parser 抛出统一的"找不到 LUT 文件"
+    key = (os.path.abspath(path), st.st_mtime_ns, st.st_size)
+    if key in _LUT_CACHE:
+        _LUT_CACHE.move_to_end(key)
+        return _LUT_CACHE[key]
+    lut = parser(path)
+    if _lut_bytes(lut) <= _LUT_CACHE_MAX_BYTES:
+        _LUT_CACHE[key] = lut
+        total = sum(_lut_bytes(v) for v in _LUT_CACHE.values())
+        while _LUT_CACHE and (total > _LUT_CACHE_MAX_BYTES or len(_LUT_CACHE) > _LUT_CACHE_MAX_ENTRIES):
+            _, old = _LUT_CACHE.popitem(last=False)
+            total -= _lut_bytes(old)
+    return lut
+
+
 def parse_cube(path):
     """解析 .cube 文件，支持 LUT_1D_SIZE / LUT_3D_SIZE、TITLE、DOMAIN_MIN/MAX、# 注释。"""
+    return _cached_parse(path, _parse_cube_file)
+
+
+def _parse_cube_file(path):
     if not os.path.isfile(path):
         raise RuntimeError(f"找不到 LUT 文件：{path}")
     size_1d = None
@@ -446,6 +486,10 @@ def parse_haldclut(path):
     """解析 HaldCLUT PNG：level N 的图尺寸 (N^3)x(N^3)，立方体边长 S=N^2。
     像素按行优先排列，线性序号 i=(b*S+g)*S+r（红最快、蓝最慢，与 .cube 数据序一致），
     返回与 parse_cube 相同的结构，供 apply_cube 三线性插值复用。支持 8/16-bit RGB/RGBA。"""
+    return _cached_parse(path, _parse_haldclut_file)
+
+
+def _parse_haldclut_file(path):
     if not os.path.isfile(path):
         raise RuntimeError(f"找不到 LUT 文件：{path}")
     with open(path, "rb") as fp:
