@@ -27,4 +27,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
 
-print("[34mFilmLook: [92mLoaded custom nodes.[0m")
+print("\033[34mFilmLook: \033[92mLoaded custom nodes.\033[0m")

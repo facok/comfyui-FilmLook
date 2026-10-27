@@ -76,9 +76,13 @@ def _get_renderer(grain_radius, n_monte_carlo, seed):
     同一个 renderer 反复渲染同尺寸只会得到同一张图案。
     """
     FilmGrainRenderer = _import_silvergrain()
-    # sigma_filter 取偏锐利的 0.5：0.8 的抗锯齿会明显软化画面细节
+    # sigma_filter 取偏锐利的 0.5：0.8 的抗锯齿会明显软化画面细节。
+    # grain_sigma 必须跟着半径走（silvergrain 官方建议 0~0.3×radius）：它是绝对像素量，
+    # 而半径按分辨率缩放，写死 0.03 会让小图上的 (r²+σ²) 分母被 σ 主导，覆盖率整体偏低，
+    # 表现为"同一张图分辨率越小、颗粒节点压暗得越多"（实测 128px 暗 8%、1024px 只暗 0.2%）。
     kwargs = {"grain_radius": grain_radius, "n_monte_carlo": n_monte_carlo,
-              "grain_sigma": 0.03, "sigma_filter": 0.5, "device": "auto", "seed": int(seed)}
+              "grain_sigma": 0.3 * grain_radius, "sigma_filter": 0.5,
+              "device": "auto", "seed": int(seed)}
     params = inspect.signature(FilmGrainRenderer).parameters
     if not any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
         kwargs = {k: v for k, v in kwargs.items() if k in params}

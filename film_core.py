@@ -57,21 +57,32 @@ def smoothstep(e0, e1, x):
     return t * t * (3.0 - 2.0 * t)
 
 
-def _percentile_per_frame(x, q, max_samples=1_000_000):
-    """逐帧百分位：x (B,H,W,1) → (B,1,1,1)，避免整批共享统计量导致曝光/阈值互相拖累。"""
+def _frame_samples(x, max_samples=1_000_000):
+    """(B,H,W,1) → (B,N)：逐帧展平，样本数超上限时等间隔抽样。
+
+    torch.quantile 对单次归约维度有 2^24 元素的上限，单帧超过约 1677 万像素
+    （8K、大横幅）会直接抛 "quantile() input tensor is too large"；抽样顺带把大图的
+    中位数/分位数计算从数百毫秒压到个位数毫秒。
+    """
     flat = x.reshape(x.shape[0], -1)
     if flat.shape[1] > max_samples:
         flat = flat[:, :: math.ceil(flat.shape[1] / max_samples)]
-    return torch.quantile(flat, q, dim=1).view(-1, 1, 1, 1)
+    return flat
+
+
+def _percentile_per_frame(x, q, max_samples=1_000_000):
+    """逐帧百分位：x (B,H,W,1) → (B,1,1,1)，避免整批共享统计量导致曝光/阈值互相拖累。"""
+    return torch.quantile(_frame_samples(x, max_samples), q, dim=1).view(-1, 1, 1, 1)
 
 
 def auto_exposure_gain(lin, target=0.18):
     """逐帧曝光增益：(B,H,W,C) → (B,1,1,1)。半强度中位数校正（开根号）+ 温和区间
     [0.75, 1.4] + 高光保护：AI 出图通常曝光正常，只纠明显偏差，不做激进重锚定。"""
     lum = luminance(lin)
-    med = lum.reshape(lin.shape[0], -1).median(dim=1).values.clamp_min(1e-4)
+    flat = _frame_samples(lum)
+    med = flat.median(dim=1).values.clamp_min(1e-4)
     gain = (target / med).sqrt().clamp(0.75, 1.4)
-    p95 = torch.quantile(lum.reshape(lin.shape[0], -1), 0.95, dim=1).clamp_min(1e-4)
+    p95 = torch.quantile(flat, 0.95, dim=1).clamp_min(1e-4)
     cap = (0.9 / p95).clamp(1.0, 2.0)
     return torch.minimum(gain, cap).view(-1, 1, 1, 1)
 
@@ -223,16 +234,25 @@ def apply_film_color(image, stock, *, strength=0.85, auto_exposure=True, brightn
 
 
 def _gaussian_blur(x, sigma):
+    """可分离高斯模糊。半径按各轴长度夹紧：F.pad(mode="reflect") 要求 pad < 该轴长度，
+    否则细长图（4096x16、512x1）和超小图（1x1）会直接抛 "Padding size should be less
+    than the corresponding input dimension"。夹紧等价于截断核，对正常尺寸无任何影响。"""
     if sigma < 0.3:
         return x
     c = x.shape[-1]
-    radius = max(1, int(math.ceil(sigma * 3.0)))
-    xs = torch.arange(-radius, radius + 1, device=x.device, dtype=x.dtype)
-    k = torch.exp(-0.5 * (xs / sigma) ** 2)
-    k = k / k.sum()
+    h, w = x.shape[1], x.shape[2]
     y = x.permute(0, 3, 1, 2)
-    y = F.conv2d(F.pad(y, (radius, radius, 0, 0), mode="reflect"), k.view(1, 1, 1, -1).expand(c, 1, 1, -1), groups=c)
-    y = F.conv2d(F.pad(y, (0, 0, radius, radius), mode="reflect"), k.view(1, 1, -1, 1).expand(c, 1, -1, 1), groups=c)
+    for axis, length in ((3, w), (2, h)):
+        radius = max(0, min(int(math.ceil(sigma * 3.0)), length - 1))
+        xs = torch.arange(-radius, radius + 1, device=x.device, dtype=x.dtype)
+        k = torch.exp(-0.5 * (xs / sigma) ** 2)
+        k = k / k.sum()
+        if axis == 3:  # 横向
+            y = F.conv2d(F.pad(y, (radius, radius, 0, 0), mode="reflect"),
+                         k.view(1, 1, 1, -1).expand(c, 1, 1, -1), groups=c)
+        else:          # 纵向
+            y = F.conv2d(F.pad(y, (0, 0, radius, radius), mode="reflect"),
+                         k.view(1, 1, -1, 1).expand(c, 1, -1, 1), groups=c)
     return y.permute(0, 2, 3, 1)
 
 
@@ -253,9 +273,11 @@ def apply_halation(image, *, strength=0.5, scales=(0.01, 0.02), auto_threshold=T
     lo = thr * 0.7
     mask = smoothstep(lo, torch.clamp(thr, min=lo + 1e-3), lum)
     hi = lin * mask
-    height = image.shape[1]
+    # 尺度按短边统一：原先用 height，横图里 height 恰是短边、竖图里却是长边，
+    # 同一档"标准"在竖图上会给出约 1.8 倍大的光晕。
+    scale = min(image.shape[1], image.shape[2])
     weights = [0.5 ** i for i in range(len(scales))]
-    halo = sum(w * _gaussian_blur(hi, s * height) for w, s in zip(weights, scales)) / sum(weights)
+    halo = sum(w * _gaussian_blur(hi, s * scale) for w, s in zip(weights, scales)) / sum(weights)
     tint_lin = srgb_to_linear(torch.tensor(tint, device=lin.device, dtype=lin.dtype).view(1, 1, 1, 3))
     halo_rgb = luminance(halo) * tint_lin
     out = 1.0 - (1.0 - lin) * (1.0 - (halo_rgb * float(strength)).clamp(0.0, 1.0))
@@ -274,8 +296,8 @@ def apply_diffusion(image, *, strength=0.2):
     lum = luminance(lin)
     mask = smoothstep(0.25, 0.75, lum)
     hi = lin * mask
-    height = image.shape[1]
-    glow = (_gaussian_blur(hi, 0.012 * height) + 0.5 * _gaussian_blur(hi, 0.03 * height)) / 1.5
+    scale = min(image.shape[1], image.shape[2])  # 同 halation：按短边统一，横竖图一致
+    glow = (_gaussian_blur(hi, 0.012 * scale) + 0.5 * _gaussian_blur(hi, 0.03 * scale)) / 1.5
     out = 1.0 - (1.0 - lin) * (1.0 - (glow * float(strength)).clamp(0.0, 1.0))
     out = linear_to_srgb(out).clamp(0.0, 1.0)
     return _join_alpha(out, alpha)
@@ -288,9 +310,11 @@ def apply_vignette(image, *, strength=0.25):
     image = image.float()
     rgb, alpha = split_alpha(image)
     b, h, w, _ = image.shape
-    ys = torch.linspace(-1.0, 1.0, h, device=image.device, dtype=image.dtype).view(1, h, 1, 1)
-    xs = torch.linspace(-1.0, 1.0, w, device=image.device, dtype=image.dtype).view(1, 1, w, 1)
-    dist = (xs * xs + ys * ys).sqrt() / math.sqrt(2.0)  # 中心 0，四角 1
+    # 用像素中心归一化：linspace(-1,1,1) 在单像素轴上会返回 -1，把整幅图当成角落；
+    # 这里 n=1 时得到 0（正中），n>1 时接近 ±1。
+    ys = (torch.arange(h, device=image.device, dtype=image.dtype) + 0.5) * (2.0 / h) - 1.0
+    xs = (torch.arange(w, device=image.device, dtype=image.dtype) + 0.5) * (2.0 / w) - 1.0
+    dist = (xs.view(1, 1, w, 1) ** 2 + ys.view(1, h, 1, 1) ** 2).sqrt() / math.sqrt(2.0)
     falloff = 1.0 - float(strength) * smoothstep(0.45, 1.0, dist)
     lin = srgb_to_linear(rgb.clamp(0.0, 1.0)) * falloff
     return _join_alpha(linear_to_srgb(lin).clamp(0.0, 1.0), alpha)
