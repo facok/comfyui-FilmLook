@@ -101,5 +101,23 @@ b = fc.apply_halation(torch.zeros(1, 1024, 256, 3).index_put_((torch.tensor([0])
 check("横竖光晕能量一致", abs(float(a.sum()) - float(b.sum())) < 1e-3,
       f"{float(a.sum()):.2f} vs {float(b.sum()):.2f}")
 
+print("[6] 滑块拉到边界的组合扫描（不应出现 NaN 或越界）")
+import itertools  # noqa: E402
+node = mod.FilmLookColor()
+img = torch.rand(1, 32, 32, 3, generator=torch.Generator().manual_seed(1))
+bad = []
+combos = 0
+for preset in ("清新人像 (Portra 400)", "黑白纪实 (Tri-X)", "自定义"):
+    for br, ct, sat, tm, tn in itertools.product((-2.0, 2.0), (0.2, 2.0), (0.0, 2.0),
+                                                 (-1.0, 1.0), (-1.0, 1.0)):
+        combos += 1
+        try:
+            out = node.execute(img, preset, 1.0, True, br, ct, sat, tm, tn, 1.0, 2.0)[0]
+            if torch.isnan(out).any() or float(out.min()) < 0.0 or float(out.max()) > 1.0:
+                bad.append((preset, br, ct, sat, tm, tn))
+        except Exception as e:  # noqa: BLE001
+            bad.append((preset, type(e).__name__, str(e)[:40]))
+check(f"{combos} 组极端组合无 NaN / 越界", not bad, str(bad[:3]))
+
 print("\n" + ("全部边界测试通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)

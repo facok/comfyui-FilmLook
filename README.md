@@ -26,7 +26,7 @@
    ```
    pip install silvergrain[gpu]
    ```
-   - 需要 NVIDIA CUDA 显卡才有实用速度：GPU 渲染 1024×1024 约 0.2 秒，CPU 约 159 秒。
+   - 需要 NVIDIA CUDA 显卡才有实用速度。1024×1024 单帧实测（RTX 6000 Ada）：速度优先约 1 秒、均衡约 2 秒、画质优先约 3.6 秒；彩色颗粒约为亮度颗粒的 3 倍；CPU 约 159 秒。
    - silvergrain 采用 **AGPLv3** 开源协议，商用前请确认合规。
    - 不安装也不影响其余三个节点。
 4. 重启 ComfyUI。
