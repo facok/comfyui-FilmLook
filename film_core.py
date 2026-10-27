@@ -97,6 +97,12 @@ def characteristic_curve(lin, toe, shoulder, gamma, pivot=0.18):
     用"端点归一化 + 幂函数回锚 pivot"，在纯曲线（toe=shoulder=0）下回锚指数恰好是
     1/gamma，会把中间调斜率精确抵消（实测 gamma 0.75~1.35 与恒等曲线差 1e-7），
     有肩部时也只剩约 1/4 的调节力。现在黑位只做减法、不做除法缩放，gamma 始终保持作用。
+
+    已知（经评估后保留）：乘性归一让肩部放大系数在 pivot 处不连续，一阶导有跳变
+    （Portra 处对数斜率 1.02→2.05）。折算到 8-bit 输出，相邻差分最大跳变仅 0.22/255，
+    亚 1 个量化级、肉眼不可见。曾改为"对数域加性补偿 + smoothstep 权重"使曲线 C¹ 连续，
+    代价是拟合变差：Gold 的性格可见度 0.031→0.029（跌破 0.030 门槛）、Portra 黑点
+    0.025→0.078（参考 0.033），故保留乘性版本。改此处请一并重跑 calibrate_stocks.py。
     """
     view = (1,) * (lin.dim() - 1) + (3,)
     t = _as_tensor(toe, lin).view(view)
