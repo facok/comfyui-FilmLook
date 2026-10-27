@@ -179,6 +179,10 @@ def apply_film_color(image, stock, *, strength=0.85, auto_exposure=True, brightn
     preserve_luminance: 0=允许胶片曲线自由改变亮度；1=输出亮度分布完全贴回原图。
     style_boost: 风格浓度，1=忠实胶片效果，>1 把预设对原图的偏离等比放大（超真实胶片）。"""
     image = image.float()
+    if float(strength) * float(style_boost) <= 0.0:
+        # 强度 0 = 原图。黑白预设尤其需要这道闸门：它的混合基准是灰度原图，
+        # 不给提前返回的话 strength=0 会返回一张灰度图而不是彩色原图。
+        return image
     rgb, alpha = split_alpha(image)
     src = rgb.clamp(0.0, 1.0)
     lin = srgb_to_linear(src)
@@ -231,6 +235,8 @@ def _gaussian_blur(x, sigma):
 def apply_halation(image, *, strength=0.5, scales=(0.01, 0.02), auto_threshold=True,
                    threshold=0.85, tint=(1.0, 0.45, 0.2)):
     """高光红橙光晕：线性域亮度阈值(软膝)取高光 → 多尺度高斯模糊 → 染成暖色 → 滤色混合。"""
+    if float(strength) <= 0.0:
+        return image  # 强度 0 = 原图，同时省掉多尺度模糊的开销
     image = image.float()
     rgb, alpha = split_alpha(image)
     lin = srgb_to_linear(rgb.clamp(0.0, 1.0))
