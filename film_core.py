@@ -151,10 +151,21 @@ def apply_vibrance(lin, saturation):
     return lum + (lin - lum) * factor
 
 
-def apply_temp_tint(lin, temperature, tint, amount=0.12):
-    if abs(temperature) < 1e-6 and abs(tint) < 1e-6:
+def apply_temp_tint(lin, temperature, tint, amount=0.30):
+    """色温 / 色调：线性域亮度守恒增益（白平衡语义，与 Lightroom 同向）。
+
+    temperature > 0 偏暖（抬 R、压 B），< 0 偏冷；tint > 0 偏品红（压 G），< 0 偏绿。
+    增益写成 (1±amount)**t 而非 1±amount·t：正负行程严格互反（+1 与 -1 互为倒数），
+    否则暖/冷两侧的色偏差不自洽（1.12 与 0.88 并不是一对倒数）。
+    amount 定的是满行程尺度：0.30 时 R/B≈1.86，按黑体辐射标定，等效白点由 D65(6500K)
+    移到约 4620K（暖）/ 11600K（冷），即 ±65 mired 左右——这是"色温"控件该有的量级；
+    原先 0.12 只有 ±25 mired（6500K→5600K），滑杆大半行程几乎看不出变化。
+    """
+    t = float(temperature)
+    n = float(tint)
+    if abs(t) < 1e-6 and abs(n) < 1e-6:
         return lin
-    g = torch.tensor([1.0 + amount * temperature, 1.0 + amount * tint, 1.0 - amount * temperature],
+    g = torch.tensor([(1.0 + amount) ** t, (1.0 - amount) ** n, (1.0 - amount) ** t],
                      device=lin.device, dtype=lin.dtype).view(1, 1, 1, 3)
     g = g / (g * _luma_w(lin.device, lin.dtype)).sum()  # 归一化：中灰亮度不变
     return lin * g

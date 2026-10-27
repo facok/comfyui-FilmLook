@@ -38,9 +38,10 @@ class FilmLookColor:
             "saturation": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.01,
                                      "tooltip": "饱和度：1 保持不变；提升时优先增强灰暗颜色，肤色更自然"}),
             "temperature": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01,
-                                      "tooltip": "色温：负值偏冷（蓝），正值偏暖（黄）"}),
+                                      "tooltip": "色温：负值偏冷（蓝），正值偏暖（黄）；"
+                                                 "满行程约相当于 ±65 mired（等效色温 6500K → 4600K / 11600K）"}),
             "tint": ("FLOAT", {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01,
-                               "tooltip": "色调：负值偏绿，正值偏品红"}),
+                               "tooltip": "色调：负值偏绿，正值偏品红；与色温同量级，只改色相不改亮度"}),
             "preserve_luminance": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05,
                                              "tooltip": "亮度保持：0 允许胶片曲线自由改变亮度，1 输出亮度完全贴回原图（只保留色彩与颗粒感）；遇到过曝时调高此值"}),
             "style_boost": ("FLOAT", {"default": 1.0, "min": 0.5, "max": 2.0, "step": 0.05,
