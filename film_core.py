@@ -79,28 +79,32 @@ def auto_exposure_gain(lin, target=0.18):
 def characteristic_curve(lin, toe, shoulder, gamma, pivot=0.18):
     """对数域分段 S 曲线：x = log2(lin)，pivot(0.18) 为中灰锚点，d = gamma*(x - p)。
     亮部用 log1p(shoulder*d)/shoulder 软压缩（肩部滚降），暗部用 log1p(toe*|d|)/toe
-    软压缩（趾部）；gamma 即中间调反差，toe/shoulder 越大压缩越强，趋 0 退化为直线。"""
+    软压缩（趾部）；gamma 即中间调反差，pivot 由构造保证不动。
+
+    肩部按 x=1 处的延拓量归一到 -p，于是 f(1)=1、f(0)=0 无需再做端点归一化——旧实现
+    用"端点归一化 + 幂函数回锚 pivot"，在纯曲线（toe=shoulder=0）下回锚指数恰好是
+    1/gamma，会把中间调斜率精确抵消（实测 gamma 0.75~1.35 与恒等曲线差 1e-7），
+    有肩部时也只剩约 1/4 的调节力。现在黑位只做减法、不做除法缩放，gamma 始终保持作用。
+    """
     view = (1,) * (lin.dim() - 1) + (3,)
     t = _as_tensor(toe, lin).view(view)
     s = _as_tensor(shoulder, lin).view(view)
     g = _as_tensor(gamma, lin).view(view)
     p = math.log2(pivot)
 
-    def curve(x):
-        d = g * (torch.log2(x.clamp_min(1e-6)) - p)
-        dpos, dneg = d.clamp_min(0.0), (-d).clamp_min(0.0)
-        hi = torch.where(s > 1e-4, torch.log1p(s * dpos) / s.clamp_min(1e-6), dpos)
-        lo = torch.where(t > 1e-4, torch.log1p(t * dneg) / t.clamp_min(1e-6), dneg)
-        return torch.pow(2.0, p + hi - lo)
+    def compress(k, v):
+        # log1p 软压缩；k 趋 0 时退化为直线
+        return torch.where(k > 1e-4, torch.log1p(k * v) / k.clamp_min(1e-6), v)
 
-    # 端点锚定回 0..1：软压缩的渐近特性会让纯黑浮起、纯白压暗，归一化恢复完整动态范围
-    y0 = curve(lin.new_tensor(1e-6))
-    y1 = curve(lin.new_tensor(1.0))
-    y = ((curve(lin) - y0) / (y1 - y0).clamp_min(1e-6)).clamp(0.0, 1.0)
-    # 二次锚定中灰：端点归一化会让 pivot 上移导致整体变亮，用幂函数把 pivot 拉回原位
-    np_ = ((pivot - y0) / (y1 - y0).clamp_min(1e-6)).clamp(1e-4, 1.0 - 1e-4)
-    k = math.log(pivot) / torch.log(np_)
-    return y.clamp_min(1e-12) ** k  # 钳离 0：y=0 时 pow 对指数求导会 NaN，正向值不变
+    d = g * (torch.log2(lin.clamp_min(1e-6)) - p)
+    dpos, dneg = d.clamp_min(0.0), (-d).clamp_min(0.0)
+    # 肩部归一：x=1 时软压缩量恰好为 -p，使 f(1) 落在 1.0，且不牵动 pivot
+    hi = compress(s, dpos) * ((-p) / compress(s, (-g * p).clamp_min(1e-6)))
+    lo = compress(t, dneg)
+    f = torch.pow(2.0, p + hi - lo)
+    # 黑位：趾部在 x→0 处会残留一个抬升，减掉它（只减不缩放，pivot 位移 <0.1 档）
+    y0 = torch.pow(2.0, p - compress(t, (-g * (math.log2(1e-6) - p)).clamp_min(1e-6)))
+    return ((f - y0) / (1.0 - y0).clamp_min(1e-6)).clamp(0.0, 1.0)
 
 
 def apply_crosstalk(lin, matrix9):

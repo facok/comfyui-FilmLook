@@ -84,7 +84,7 @@ def _inv_sigmoid(v):
     return torch.log(v / (1.0 - v))
 
 
-def fit_stock(label, ref_lut, steps):
+def fit_stock(label, ref_lut, steps, lr=0.005):
     stock0 = FILM_STOCKS[label]
     mono = bool(stock0.get("monochrome"))
     pal = make_palette().to(DEVICE)
@@ -145,7 +145,7 @@ def fit_stock(label, ref_lut, steps):
 
     rmse_before = rmse(stock0)
     eye = torch.eye(3, device=DEVICE).reshape(-1)
-    opt = torch.optim.Adam(params.values(), lr=0.005)
+    opt = torch.optim.Adam(params.values(), lr=lr)
     for i in range(steps):
         opt.zero_grad()
         out = film_core.apply_film_color(pal, build(), strength=1.0, auto_exposure=False)
@@ -240,14 +240,15 @@ def main():
     steps = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
     which = sys.argv[2] if len(sys.argv) > 2 else "merged"
     filt = sys.argv[3] if len(sys.argv) > 3 else ""
+    lr = float(sys.argv[4]) if len(sys.argv) > 4 else 0.005
     mapping = {"substitute": STOCK_TO_LUT_SUBSTITUTE, "true": STOCK_TO_LUT_TRUE,
                "true2": STOCK_TO_LUT_TRUE2}.get(which, STOCK_TO_LUT)
     mapping = {k: v for k, v in mapping.items() if filt in k}
-    print(f"device={DEVICE} steps={steps} 参考集={which} 色板颜色数={make_palette().shape[1]}")
+    print(f"device={DEVICE} steps={steps} lr={lr} 参考集={which} 色板颜色数={make_palette().shape[1]}")
     results = {}
     for label, lut_file in mapping.items():
         ref_lut = film_core.parse_cube(_resolve_lut(lut_file))
-        stock0, fitted, fitted_vals, rmse_before, rmse_after = fit_stock(label, ref_lut, steps)
+        stock0, fitted, fitted_vals, rmse_before, rmse_after = fit_stock(label, ref_lut, steps, lr)
         results[label] = (stock0, fitted, fitted_vals, ref_lut, lut_file, rmse_before, rmse_after)
         print(f"{label:22s} <- {lut_file:28s} RMSE 拟合前 {rmse_before:.4f} -> 拟合后 {rmse_after:.4f}")
 

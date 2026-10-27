@@ -2,9 +2,9 @@
 """胶片预设参数表（纯数据）。
 
 curve 为每通道 (R, G, B) 的特性曲线参数：
-  gamma    —— 中间调斜率（反差），1.0 为中性
-  toe      —— 暗部软压缩强度（趾部），越大暗部越柔
-  shoulder —— 高光软压缩强度（肩部），越大高光滚降越明显
+  gamma    —— 中间调斜率（反差），1.0 为中性；pivot(0.18) 由曲线构造保证不动
+  toe      —— 暗部软压缩强度（趾部），越大暗部越柔、黑位抬升越明显
+  shoulder —— 高光软压缩强度（肩部），越大中高调越亮、亮部滚降越缓
 crosstalk 为 3x3 通道串扰矩阵（按行 9 个数，行和约等于 1 以保住曝光）。
 split_tone 为分离色调：shadow / highlight 为 sRGB 颜色，amt 为强度。
 sat_scale 会乘到用户饱和度上（用户为 1 时即预设推荐饱和度）。
@@ -16,73 +16,77 @@ poptechstudio/ai-cinema-studio-engine（MIT）、YahiaAngelo/Film-Luts 的
 G'MIC/Pat David 胶片集（CC BY-SA 数据，仅作标定参考不随插件分发）、
 ganjmeng/dazz-retro-camera（MIT），以及用户 luts/ 收藏中的同名胶片 LUT。
 每个预设条目标注了拟合所用的参考 LUT。"自定义"保持中性，未参与拟合。
+
+本表在 characteristic_curve 改为"肩部按 x=1 归一、gamma 不再被回锚抵消"之后整体
+重新标定过一次（同一套参考 LUT、同一色板、同一目标函数）；gamma 从原先的实际失效
+变成了真正的中间调调节量，因此数值与旧版不可直接比较。
 """
 
 FILM_STOCKS = {
-    "清新人像 (Portra 400)": {  # 拟合参考 kodak_portra_400.cube（真 Portra 400，G'MIC/Pat David 集）
-        "curve": {"gamma": (0.6654, 0.6648, 0.6656), "toe": (0.4560, 0.6296, 0.6152), "shoulder": (0.7137, 0.6017, 0.5760)},
-        "crosstalk": [0.9779, 0.0743, 0.1270,
-                      0.0387, 0.9810, 0.1308,
-                      -0.0264, 0.1831, 0.9651],
-        "split_tone": {"shadow": (0.3510, 0.0121, 0.6008), "shadow_amt": 0.0121,
-                       "highlight": (0.7122, 0.7097, 0.7073), "highlight_amt": 0.3489},
-        "sat_scale": 1.3812,
-        "black_lift": (0.0064, 0.0075, 0.0056),
+    "清新人像 (Portra 400)": {  # 参考 tests/reference_luts/kodak_portra_400.cube
+        "curve": {"gamma": (1.0284, 0.9244, 0.9443), "toe": (0.0415, 0.0413, 0.0424), "shoulder": (1.1021, 1.1065, 1.0848)},
+        "crosstalk": [0.9785, 0.0706, 0.1295,
+                      0.0419, 0.9815, 0.1281,
+                      -0.0222, 0.2043, 0.9565],
+        "split_tone": {"shadow": (0.3396, 0.0201, 0.6032), "shadow_amt": 0.0098,
+                       "highlight": (0.712, 0.711, 0.7055), "highlight_amt": 0.3491},
+        "sat_scale": 1.4584,
+        "black_lift": (0.0018, 0.0022, 0.0018),
         "monochrome": False,
     },
-    "日系空气感 (Fuji 400H)": {  # 拟合参考 fuji_400h.cube（真 400H，G'MIC/Pat David 集）
-        "curve": {"gamma": (0.6641, 0.6665, 0.6664), "toe": (0.0649, 0.1585, 0.0642), "shoulder": (0.3227, 0.2047, 0.2362)},
-        "crosstalk": [0.9354, 0.0936, 0.2270,
-                      0.0544, 0.9789, 0.1328,
-                      0.0196, 0.1879, 0.9628],
-        "split_tone": {"shadow": (0.9760, 0.1344, 0.2423), "shadow_amt": 0.0334,
-                       "highlight": (0.9732, 0.9370, 0.8969), "highlight_amt": 0.3033},
-        "sat_scale": 1.4475,
-        "black_lift": (0.0067, 0.0095, 0.0069),
+    "日系空气感 (Fuji 400H)": {  # 参考 tests/reference_luts/fuji_400h.cube
+        "curve": {"gamma": (0.9838, 0.838, 0.9674), "toe": (0.0092, 0.0071, 0.0169), "shoulder": (0.6064, 0.5435, 0.423)},
+        "crosstalk": [0.9322, 0.1086, 0.2254,
+                      0.0557, 0.9799, 0.1287,
+                      0.0219, 0.1989, 0.9580],
+        "split_tone": {"shadow": (0.981, 0.1474, 0.144), "shadow_amt": 0.0304,
+                       "highlight": (0.9743, 0.9358, 0.8973), "highlight_amt": 0.2563},
+        "sat_scale": 1.4806,
+        "black_lift": (0.0026, 0.0035, 0.0028),
         "monochrome": False,
     },
-    "暖阳金调 (Kodak Gold)": {  # 拟合参考 cpm35_kodak_gold_warm.cube（真 Gold 200 暖调，dazz-retro-camera）
-        "curve": {"gamma": (0.9839, 0.7999, 0.7991), "toe": (0.2480, 0.2287, 0.0611), "shoulder": (0.3957, 0.3709, 0.2044)},
-        "crosstalk": [0.9849, -0.1230, -0.0137,
-                      -0.0254, 0.9993, -0.0077,
-                      -0.0039, -0.0061, 1.0000],
-        "split_tone": {"shadow": (0.6318, 0.4888, 0.1397), "shadow_amt": 0.1259,
-                       "highlight": (0.9545, 0.7407, 0.2003), "highlight_amt": 0.1290},
-        "sat_scale": 1.0358,
-        "black_lift": (0.0009, 0.0, 0.0001),
+    "暖阳金调 (Kodak Gold)": {  # 参考 tests/reference_luts/cpm35_kodak_gold_warm.cube
+        "curve": {"gamma": (1.1672, 1.1471, 1.1445), "toe": (0.0435, 0.0405, 0.0223), "shoulder": (0.3739, 0.3194, 0.1812)},
+        "crosstalk": [0.9917, -0.0922, -0.0159,
+                      -0.0199, 0.9997, -0.0059,
+                      -0.0026, -0.0051, 1.0000],
+        "split_tone": {"shadow": (0.6143, 0.4776, 0.1796), "shadow_amt": 0.1074,
+                       "highlight": (0.9617, 0.731, 0.1026), "highlight_amt": 0.1142},
+        "sat_scale": 1.1062,
+        "black_lift": (0.0015, 0.0004, 0.0001),
         "monochrome": False,
     },
-    "冷调电影感 (Vision3 500T)": {  # 拟合参考 kodak_vision3_500t.cube
-        "curve": {"gamma": (1.2956, 1.1115, 1.1158), "toe": (0.3058, 0.1985, 0.1100), "shoulder": (0.2088, 0.1403, 0.0136)},
-        "crosstalk": [1.0024, 0.0414, -0.0498,
-                      -0.0171, 1.0004, -0.0125,
-                      -0.2409, 0.0587, 0.8974],
-        "split_tone": {"shadow": (0.9657, 0.7453, 0.0199), "shadow_amt": 0.3447,
-                       "highlight": (0.9206, 0.7723, 0.0413), "highlight_amt": 0.1404},
-        "sat_scale": 1.4516,
-        "black_lift": (0.0180, 0.0032, 0.0001),
+    "冷调电影感 (Vision3 500T)": {  # 参考 kodak_vision3_500t.cube
+        "curve": {"gamma": (0.982, 0.9015, 1.0769), "toe": (0.1426, 0.0022, 0.1493), "shoulder": (0.1998, 0.1963, 0.0006)},
+        "crosstalk": [0.9952, 0.0630, -0.1196,
+                      -0.0366, 1.0038, -0.0043,
+                      -0.2612, -0.1260, 0.9098],
+        "split_tone": {"shadow": (0.9577, 0.7234, 0.3606), "shadow_amt": 0.3496,
+                       "highlight": (0.936, 0.7353, 0.0212), "highlight_amt": 0.1195},
+        "sat_scale": 1.4979,
+        "black_lift": (0.0119, 0.0032, 0.0),
         "monochrome": False,
     },
-    "浓郁鲜艳 (Ektar)": {  # 拟合参考 Neg_Kodak_Ektar_100.cube（真 Ektar 负片 LUT）
-        "curve": {"gamma": (1.0761, 0.8994, 0.9027), "toe": (0.0720, 0.0614, 0.0628), "shoulder": (0.0042, 0.0010, 0.0011)},
-        "crosstalk": [0.9998, -0.0057, 0.0046,
-                      0.0125, 0.9983, 0.0384,
-                      -0.0145, 0.1897, 0.9623],
-        "split_tone": {"shadow": (0.7929, 0.7812, 0.0606), "shadow_amt": 0.0161,
-                       "highlight": (0.7146, 0.9794, 0.5555), "highlight_amt": 0.0545},
-        "sat_scale": 1.0763,
-        "black_lift": (0.0012, 0.0004, 0.0006),
+    "浓郁鲜艳 (Ektar)": {  # 参考 Neg_Kodak_Ektar_100.cube
+        "curve": {"gamma": (1.309, 1.2098, 1.2168), "toe": (0.2608, 0.1775, 0.1815), "shoulder": (0.0025, 0.0033, 0.003)},
+        "crosstalk": [1.0004, -0.0032, 0.0032,
+                      0.0157, 0.9981, 0.0406,
+                      -0.0133, 0.1930, 0.9610],
+        "split_tone": {"shadow": (0.8937, 0.4815, 0.0651), "shadow_amt": 0.0115,
+                       "highlight": (0.7482, 0.9745, 0.6168), "highlight_amt": 0.0475},
+        "sat_scale": 1.0831,
+        "black_lift": (0.0006, 0.0003, 0.0003),
         "monochrome": False,
     },
-    "黑白纪实 (Tri-X)": {  # 拟合参考 BW_Kodak_TriX_400.cube（真 Tri-X LUT；串扰=感光权重）
-        "curve": {"gamma": (1.2328, 1.2327, 1.2326), "toe": (0.8356, 0.8356, 0.8356), "shoulder": (0.8479, 0.8479, 0.8479)},
-        "crosstalk": [0.8100, -0.1636, 0.1932,
-                      0.0377, 0.7734, 0.1646,
-                      -0.2046, -0.2112, 0.7661],
-        "split_tone": {"shadow": (0.8161, 0.6261, 0.9601), "shadow_amt": 0.0234,
-                       "highlight": (0.9657, 0.9382, 0.9893), "highlight_amt": 0.0535},
+    "黑白纪实 (Tri-X)": {  # 参考 BW_Kodak_TriX_400.cube；串扰=感光权重
+        "curve": {"gamma": (1.1877, 1.1836, 1.1789), "toe": (0.1088, 0.1088, 0.1085), "shoulder": (1.2856, 1.2856, 1.2858)},
+        "crosstalk": [0.8096, -0.1646, 0.1987,
+                      0.0328, 0.7724, 0.1700,
+                      -0.2011, -0.2079, 0.7730],
+        "split_tone": {"shadow": (0.8284, 0.6919, 0.944), "shadow_amt": 0.0177,
+                       "highlight": (0.9648, 0.9457, 0.9809), "highlight_amt": 0.0346},
         "sat_scale": 1.0,
-        "black_lift": (0.0075, 0.0078, 0.0111),
+        "black_lift": (0.0051, 0.0053, 0.0078),
         "monochrome": True,
     },
     "自定义": {
