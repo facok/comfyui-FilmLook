@@ -17,19 +17,25 @@ colour-science / scipy / pyqt。完整链路：
 ## 当前状态（2026-10）
 
 链路已跑通，5 支彩色胶片能生成**互不相同、物理合理**的黑位与高光（500T 黑位更沉、
-Ektar 高光偏蓝），但还没达到可替换 `presets/` 的质量：
+Ektar 高光偏蓝），灰阶严格单调、无 NaN，高光加了软滚降不再硬切顶。但**还不能替换
+`presets/`**，量化差距（Portra 对参考 LUT）：
 
-- **高光削顶**：参考实现有一整套 `output_transform`（Rec.709/2383 的显示映射 + 高光
-  rolloff + 色域压缩），这里只做了线性投影 + 中灰定标，导致高光 R 通道先到 1.0。
-- **中灰被过度统一**：色度白平衡把所有预设的中灰都拉成同一个值，抹掉了胶片间的色偏
-  差异；应改为只校正整体偏色，保留各胶片的中间调色偏。
-- **黑白片未接**：Tri-X（负片）+ 2302（印片）走的是另一条 BW 链路（标量密度），
-  当前代码路径未实现。
-- **与现有参考 LUT 不可比**：`presets/` 里那 6 条看起来是"负片扫描"路线（中性、无印片
-  偏色），而本工具是"负片 + 2383 放映拷贝"路线，两者性格本就不同，不能直接逐点对比。
+    765 色板色度均值：本工具 0.314 / 参考 LUT 0.451 / 原图 0.556
+    与参考 LUT 的差异：平均 |Δ| 0.24，95 分位 0.64
 
-下一步：补 output_transform（高光 rolloff + 色域压缩）、把白平衡降为"只校整体偏色"、
-接上 BW 链路，然后用 `presets/*.cube` 与参考 LUT 做交叉验收。
+即生成结果**明显偏灰**。已定位的主要缺口：
+
+- **光谱密度拆分太粗**：参考实现用 `construct_spectral_density` 找密度曲线的局部极值，
+  再用高斯平滑的软掩膜把一条密度曲线拆成 R/G/B 三层；这里用的是 500nm / 600nm 硬切分
+  + 3 点盒式平滑，三层严重重叠 → 通道串扰过大 → 去饱和。这是当前色度偏低的首要原因。
+- **`output_transform` 未完整移植**：参考实现有 OkLab 饱和度调整、2.5D xy LUT 的色域
+  映射、亮度恢复、可选 Reinhard rolloff；这里只有线性投影 + 中灰定标 + 简单滚降。
+- **中灰被过度统一**：色度白平衡把所有预设的中灰拉成同一个值，抹掉了胶片间的色偏差异。
+- **黑白片未接**：Tri-X（负片）+ 2302（印片）走标量密度的另一条链路。
+- 与 `presets/` 里的参考 LUT 路线不同（那 6 条像"负片扫描"，本工具是"负片 + 2383 放映
+  拷贝"），不能期望逐点接近，应按"性格是否对"来验收。
+
+下一步优先级：把光谱密度拆分换成极值 + 高斯软掩膜 → 再补 output_transform → 接 BW。
 
 用法（离线，不参与插件运行时）：
     python tools/gen_film_luts.py --list
@@ -252,6 +258,13 @@ def build_lut(neg, prt, size=33, projector_kelvin=6500, white_balance=True):
         xyz_out = xyz_out * (white[1] / np.clip(white, 1e-8, None))
 
     rgb_out = np.clip(xyz_out @ xyz2rgb.T, 0, None)
+
+    # 高光软滚降：knee 以上指数逼近 1.0，避免 R 通道在 0.83 左右就硬切顶
+    knee = 0.80
+    over = np.clip(rgb_out - knee, 0, None)
+    rgb_out = np.where(rgb_out > knee,
+                       knee + (1.0 - knee) * (1.0 - np.exp(-over / (1.0 - knee))),
+                       rgb_out)
     out = np.clip(linear_to_srgb(rgb_out), 0, 1)
     return out.reshape(size, size, size, 3)
 
