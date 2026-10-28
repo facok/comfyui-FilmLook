@@ -2,7 +2,7 @@
 """一键节点：FilmLookOneClick（调色 + 光晕 + 颗粒一次完成）。"""
 
 from . import film_core
-from .film_stocks import PRESET_LABELS, preset_entry, preset_tooltip
+from .film_stocks import LEGACY_PRESETS, PRESET_LABELS, preset_entry, preset_tooltip
 from .grain_nodes import GRAIN_LEVELS, apply_grain
 from .halation_nodes import RADIUS_PRESETS
 
@@ -39,6 +39,17 @@ class FilmLookOneClick:
     FUNCTION = "execute"
     CATEGORY = "FilmLook"
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, preset):
+        """放行旧预设名。
+
+        改过名的预设（见 film_stocks.LEGACY_PRESETS）仍可能出现在已保存的工作流里。
+        ComfyUI 默认会拿 combo 选项校验，旧名会被直接拒绝；这里接管这项校验，
+        只要名字在「当前列表」或「旧名映射」里就通过，execute 时再解析成新名。
+        """
+        if preset in PRESET_LABELS or preset in LEGACY_PRESETS:
+            return True
+        return (f"未知的胶片预设“{preset}”。可选：{' / '.join(PRESET_LABELS)}")
     def execute(self, image, preset, grain_level, strength, halation_strength,
                 auto_exposure, preserve_luminance, style_boost, diffusion, vignette, seed):
         image = film_core.sanitize(image)

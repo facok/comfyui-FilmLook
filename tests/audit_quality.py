@@ -17,7 +17,7 @@ from comfyui_FilmLook import film_core
 from comfyui_FilmLook.film_stocks import preset_entry
 from comfyui_FilmLook.grain_nodes import apply_grain
 
-stock = preset_entry("冷调电影感 (Vision3 500T)")
+stock = preset_entry("夜景暖调 (Vision3 500T)")
 
 
 def section(t):

@@ -4,7 +4,7 @@
 import os
 
 from . import film_core
-from .film_stocks import PRESET_LABELS, preset_entry, preset_tooltip
+from .film_stocks import LEGACY_PRESETS, PRESET_LABELS, preset_entry, preset_tooltip
 
 LUTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "luts")
 CUSTOM_PATH_ENTRY = "自定义路径"
@@ -44,6 +44,17 @@ class FilmLookColor:
     FUNCTION = "execute"
     CATEGORY = "FilmLook/色彩"
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, preset):
+        """放行旧预设名。
+
+        改过名的预设（见 film_stocks.LEGACY_PRESETS）仍可能出现在已保存的工作流里。
+        ComfyUI 默认会拿 combo 选项校验，旧名会被直接拒绝；这里接管这项校验，
+        只要名字在「当前列表」或「旧名映射」里就通过，execute 时再解析成新名。
+        """
+        if preset in PRESET_LABELS or preset in LEGACY_PRESETS:
+            return True
+        return (f"未知的胶片预设“{preset}”。可选：{' / '.join(PRESET_LABELS)}")
     def execute(self, image, preset, strength, auto_exposure, brightness, contrast,
                 saturation, temperature, tint, preserve_luminance, style_boost):
         image = film_core.sanitize(image)

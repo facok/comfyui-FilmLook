@@ -170,8 +170,8 @@ def main():
         check(f"Color[{preset}]", out, img)
     check("Color[手动参数]", node.execute(img, "自定义", 1.0, True, 0.3, 1.2, 1.3, 0.2, -0.1, 0.0, 1.0)[0], img)
     check("Color[批次x2]", node.execute(batch, "暖阳金调 (Kodak Gold)", 0.85, True, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0)[0], batch)
-    check("Color[关智能曝光]", node.execute(img, "冷调电影感 (Vision3 500T)", 1.0, False, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0)[0], img)
-    check("Color[亮度保持]", node.execute(img, "浓郁鲜艳 (Ektar)", 1.0, True, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0)[0], img)
+    check("Color[关智能曝光]", node.execute(img, "夜景暖调 (Vision3 500T)", 1.0, False, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0)[0], img)
+    check("Color[亮度保持]", node.execute(img, "自然淡彩 (Ektar 100)", 1.0, True, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0)[0], img)
     check("Color[风格浓度x2]", node.execute(img, "暖阳金调 (Kodak Gold)", 1.0, True, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 2.0)[0], img)
 
     print("[2] FilmLookHalation（自动/手动阈值 + 批次）")

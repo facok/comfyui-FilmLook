@@ -97,8 +97,12 @@ print("\n[3] README 里不该出现已删除的实现（防止文档滞后）")
 for stale in ("characteristic_curve", "crosstalk 矩阵", "split_tone", "参数化模型拟合"):
     check(f"未残留「{stale}」", stale not in text)
 
-print("\n[4] 关键事实必须被写明")
-for must in ("presets/LICENSE.md", "preset_character_test.py", "冷调电影感"):
+print("\n[4] 每个 tests/*.py 都要在 README 的测试清单里出现")
+for f in sorted((P / "tests").glob("*.py")):
+    check(f"README 提到 {f.name}", f.name in text)
+
+print("\n[5] 关键事实必须被写明")
+for must in ("presets/LICENSE.md", "preset_character_test.py", "夜景暖调"):
     check(f"README 提到 {must}", must in text)
 
 print("\n" + ("README 与实现一致。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))

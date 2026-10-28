@@ -89,22 +89,22 @@ check("暖阳金调「彩色预设里反差最高」",
           M[k]["contrast"] for k in M if k not in ("暖阳金调 (Kodak Gold)", "黑白纪实 (Tri-X)", "自定义")),
       f"contrast={M['暖阳金调 (Kodak Gold)']['contrast']:.2f}")
 
-check("冷调电影感「偏暖」", M["冷调电影感 (Vision3 500T)"]["warm"] > 0.10,
-      f"warm={M['冷调电影感 (Vision3 500T)']['warm']:+.3f}")
-check("冷调电影感「中等饱和」", 0.80 <= M["冷调电影感 (Vision3 500T)"]["ratio"] <= 1.05,
-      f"ratio={M['冷调电影感 (Vision3 500T)']['ratio']:.2f}")
+check("夜景暖调「偏暖」", M["夜景暖调 (Vision3 500T)"]["warm"] > 0.10,
+      f"warm={M['夜景暖调 (Vision3 500T)']['warm']:+.3f}")
+check("夜景暖调「中等饱和」", 0.80 <= M["夜景暖调 (Vision3 500T)"]["ratio"] <= 1.05,
+      f"ratio={M['夜景暖调 (Vision3 500T)']['ratio']:.2f}")
 
-check("浓郁鲜艳「比原图略淡」", M["浓郁鲜艳 (Ektar)"]["ratio"] < 0.90,
-      f"ratio={M['浓郁鲜艳 (Ektar)']['ratio']:.2f}")
-check("浓郁鲜艳「色调中性偏冷」", M["浓郁鲜艳 (Ektar)"]["warm"] < 0.05,
-      f"warm={M['浓郁鲜艳 (Ektar)']['warm']:+.3f}")
+check("自然淡彩「比原图略淡」", M["自然淡彩 (Ektar 100)"]["ratio"] < 0.90,
+      f"ratio={M['自然淡彩 (Ektar 100)']['ratio']:.2f}")
+check("自然淡彩「色调中性偏冷」", M["自然淡彩 (Ektar 100)"]["warm"] < 0.05,
+      f"warm={M['自然淡彩 (Ektar 100)']['warm']:+.3f}")
 
 check("黑白纪实「黑白」", M["黑白纪实 (Tri-X)"]["chroma"] < 1e-3,
       f"chroma={M['黑白纪实 (Tri-X)']['chroma']:.4f}")
 
 print("[3] 全表排序断言（防止换错 LUT）")
 check("Vision3 500T 是全场最暖",
-      M["冷调电影感 (Vision3 500T)"]["warm"] >= max(v["warm"] for v in M.values()))
+      M["夜景暖调 (Vision3 500T)"]["warm"] >= max(v["warm"] for v in M.values()))
 check("Fuji 400H 是彩色预设里最淡",
       M["日系空气感 (Fuji 400H)"]["ratio"] <= min(
           v["ratio"] for k, v in M.items() if k not in ("黑白纪实 (Tri-X)",)))
@@ -119,6 +119,23 @@ print(f"  {'预设':24s} {'色度':>6s} {'相对':>5s} {'暖度':>7s} {'反差':
 for k, v in M.items():
     print(f"  {k:24s} {v['chroma']:6.3f} {v['ratio']:5.2f} {v['warm']:+7.3f} "
           f"{v['contrast']:5.2f} {v['black']:6.3f}")
+
+print("\n[4] 旧预设名仍然可用（改名不得破坏已保存的工作流）")
+_grade = mod.FilmLookColor()
+_kw = dict(strength=1.0, auto_exposure=True, brightness=0.0, contrast=1.0, saturation=1.0,
+           temperature=0.0, tint=0.0, preserve_luminance=0.0, style_boost=1.0)
+_probe = torch.rand(1, 8, 8, 3, generator=torch.Generator().manual_seed(21))
+for old, new in stocks.LEGACY_PRESETS.items():
+    check(f"「{old}」解析为「{new}」", stocks.resolve_preset(old) == new)
+    a = _grade.execute(_probe, old, **_kw)[0]
+    b = _grade.execute(_probe, new, **_kw)[0]
+    check("  旧名与新名输出逐像素一致", torch.equal(a, b))
+    check("  旧名通过 VALIDATE_INPUTS",
+          mod.FilmLookColor.VALIDATE_INPUTS(preset=old) is True)
+    check("  OneClick 同样放行旧名",
+          mod.FilmLookOneClick.VALIDATE_INPUTS(preset=old) is True)
+_unknown = mod.FilmLookColor.VALIDATE_INPUTS(preset="根本没有这个预设")
+check("未知名字被拒绝且提示可选值", isinstance(_unknown, str) and "可选" in _unknown)
 
 print("\n" + ("全部预设描述校验通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)

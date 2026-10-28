@@ -68,12 +68,15 @@
 | 清新人像 (Portra 400) | 低反差、轻微降饱和，色调近中性 | 0.81× | +0.01 | `presets/portra_400.cube` | G'MIC（CC BY-SA） |
 | 日系空气感 (Fuji 400H) | 低饱和、通透，中调偏暖 | 0.77× | +0.07 | `presets/fuji_400h.cube` | G'MIC（CC BY-SA） |
 | 暖阳金调 (Kodak Gold) | 暖调，彩色预设里反差与饱和最高 | 1.06× | +0.04 | `presets/kodak_gold_200_warm.cube` | dazz-retro-camera（MIT） |
-| 冷调电影感 (Vision3 500T) | **偏暖**、中等饱和（钨丝平衡胶片面对 D65 的自然结果） | 0.91× | **+0.16** | `presets/vision3_500t.cube` | poptechstudio（MIT） |
-| 浓郁鲜艳 (Ektar) | 色调中性偏冷，**比原图略淡** | 0.79× | +0.02 | `presets/ektar_100.cube` | G'MIC（CC BY-SA） |
+| 夜景暖调 (Vision3 500T) | 明显偏暖、中等饱和；路灯/夜景最对味 | 0.91× | **+0.16** | `presets/vision3_500t.cube` | poptechstudio（MIT） |
+| 自然淡彩 (Ektar 100) | 色调中性偏冷，比原图更淡；日常/静物 | 0.79× | +0.02 | `presets/ektar_100.cube` | G'MIC（CC BY-SA） |
 | 黑白纪实 (Tri-X) | 高反差黑白，灰轴中性 | — | 0.00 | `presets/trix_400.cube` | G'MIC（CC BY-SA） |
 | 自定义 | 不做 LUT 变换 | 1.00× | 0.00 | 无（直通） | — |
 
-> 两条名字与观感明显不符：「冷调电影感」实际是全套最暖的一条，「浓郁鲜艳」实际比原图更淡。原因是这两条 LUT 本身的性格如此（Vision3 500T 是钨丝平衡胶片；`ektar_100` 在肤色/天空上去饱和）。工具里已经在预设下拉框的 tooltip 标出实测性格；彻底解决要靠自产 LUT（见「路线图」），或改名（会破坏已保存的工作流，需你确认）。
+> **关于改名**：早先这两个预设叫「冷调电影感 (Vision3 500T)」和「浓郁鲜艳 (Ektar)」，但实测下来前者是**全套最暖**（R−B +0.16，因为 500T 是钨丝平衡胶片，蓝色夜空会变褐——那是钨丝片的正常表现，不是 bug）、后者**比原图更淡**（0.79×）。名不副实会误导用户，因此按实测改名。
+>
+> **旧工作流不会坏**：旧名字仍在 `film_stocks.LEGACY_PRESETS` 里做了映射，节点用 `VALIDATE_INPUTS` 放行旧名，输出与改名后逐像素一致。
+
 
 
 
@@ -156,7 +159,7 @@ A：不会。每一帧都用 `seed` 与帧号派生出的独立种子重新渲�
 所有测试都用 ComfyUI 自带的 Python 直接跑（不需要额外依赖）：
 
 ```bash
-python tests/smoke_test.py              # 五个节点跑通、形状/值域/NaN
+python tests/smoke_test.py              # 六个节点跑通、形状/值域/NaN
 python tests/param_direction_test.py    # 色温/色调的方向、互反、亮度守恒
 python tests/node_contract_test.py      # 节点注册表/签名/默认值/返回声明的一致性
 python tests/preset_character_test.py   # 预设描述与实测性格一致（文档即契约）
@@ -166,6 +169,7 @@ python tests/readme_drift_test.py       # README 参数表与节点真实输入�
 python tests/luts_index_test.py         # luts/README.md 索引与目录、实测数值一致
 python tests/generator_test.py          # LUT 生成器：通道朝向、灰阶单调、写读往返
 python tests/audit_quality.py           # 性能、显存、极端输入（需 CUDA）
+python tests/demo_render.py             # 非测试：把合成场景跑一遍各预设，出 PNG 供目检
 ```
 
 `tools/` 下是离线工具，不参与运行时：`gen_film_luts.py`（从胶片数据手册生成 LUT，实验性，状态见文件头）、`index_luts.py`（重新生成 `luts/README.md` 索引）。
@@ -186,5 +190,5 @@ python tests/audit_quality.py           # 性能、显存、极端输入（需 C
   - [x] 5 支彩色胶片能生成互不相同、物理合理的黑位与高光；高光软滚降、通道朝向自检、写读往返测试齐备。
   - [x] **结论**：这条"负片 + 2383 放映拷贝"路线与 `presets/` 里那条（更像负片扫描）**定位不同**——生成结果反差 0.81 vs 参考 0.43、暖度 +0.17 vs +0.01，且 5 支胶片的暖度只差 0.04（印片阶段盖过了胶片个性）。因此它不适合直接替换 `presets/`。
   - [ ] 若继续 B：改走"负片 → 扫描"路线，并移植 barycentric NNLS 谱上采样（治本），否则复刻不出参考 LUT 的性格。
-  - [ ] 若不继续 B：按实测把预设中文名改准（`冷调电影感` 实际最暖、`浓郁鲜艳` 实际比原图淡）——纯文案改动，但会破坏已保存的工作流，需要确认。
+  - [ ] 若不继续 B：按实测把预设中文名改准（`夜景暖调` 实际最暖、`自然淡彩` 实际比原图淡）——纯文案改动，但会破坏已保存的工作流，需要确认。
 
