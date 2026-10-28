@@ -175,5 +175,29 @@ for tag, fn in (
     out = fn()
     check(f"{tag}：4 通道且 alpha 不变", out.shape[-1] == 4 and torch.equal(out[..., 3:4], alpha))
 
+print("[10] 分辨率无关性：低分辨率预览与高分辨率出图观感一致")
+import torch.nn.functional as F  # noqa: E402
+
+yy, xx = torch.meshgrid(torch.linspace(-1, 1, 256), torch.linspace(-1, 1, 256), indexing="ij")
+scene = (1 - ((xx ** 2 + yy ** 2) / 2).clamp(0, 1)).clamp(0, 1)
+scene[90:110, 90:110] = 1.0                       # 一块高光，用来触发光晕
+small = scene.view(1, 256, 256, 1).expand(1, 256, 256, 3).contiguous()
+big = F.interpolate(small.permute(0, 3, 1, 2), size=(1024, 1024),
+                    mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
+for tag, fn in (
+    ("柔光", lambda x: fc.apply_diffusion(x, strength=0.5)),
+    ("暗角", lambda x: fc.apply_vignette(x, strength=0.5)),
+    ("光晕", lambda x: fc.apply_halation(x, strength=0.6, auto_threshold=False, threshold=0.6)),
+    ("调色", lambda x: fc.apply_film_color(
+        x, mod.film_stocks.preset_entry("清新人像 (Portra 400)"), strength=1.0, auto_exposure=False)),
+):
+    a = fn(small)
+    b = fn(big)
+    b_ds = F.interpolate(b.permute(0, 3, 1, 2), size=(256, 256),
+                         mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
+    d = (a - b_ds).abs()
+    check(f"{tag}：256 与 1024 结果一致", float(d.mean()) < 0.005 and float(d.max()) < 0.02,
+          f"平均|Δ|={float(d.mean()):.4f} 最大|Δ|={float(d.max()):.4f}")
+
 print("\n" + ("全部边界测试通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)
