@@ -33,6 +33,6 @@ class FilmLookHalation:
 
     def execute(self, image, strength, radius, auto_threshold, threshold):
         image = film_core.sanitize(image)
-        out = film_core.apply_halation(image, strength=strength, scales=RADIUS_PRESETS[radius],
+        out = film_core.apply_halation(image, strength=strength, scales=film_core.pick("光晕范围", radius, RADIUS_PRESETS),
                                        auto_threshold=auto_threshold, threshold=threshold)
         return (out,)

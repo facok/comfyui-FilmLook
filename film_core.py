@@ -19,6 +19,21 @@ def _luma_w(device, dtype):
     return torch.tensor(_LUMA, device=device, dtype=dtype).view(1, 1, 1, 3)
 
 
+def pick(kind, value, options):
+    """按键取值，键不存在时给出**带可选值**的报错。
+
+    裸 KeyError 只会说 "'xxx'"，用户（或三个月后的你）根本不知道有效值是什么。
+    这种值只可能来自旧工作流或直接调 API——下拉框本身有 ComfyUI 校验。
+    """
+    try:
+        return options[value]
+    except KeyError:
+        valid = " / ".join(str(k) for k in options)
+        raise ValueError(
+            f"{kind}“{value}”不在可选范围内。可选：{valid}。"
+            f"如果这是旧工作流里保存的值，重新选一次即可。") from None
+
+
 def sanitize(image):
     """入口清洗：NaN→0、+inf→1、-inf→0。对有限值完全恒等，正常路径无副作用。
 

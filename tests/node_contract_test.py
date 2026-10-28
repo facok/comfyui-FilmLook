@@ -92,5 +92,27 @@ for key, cls in maps.items():
     check(f"{key} 以 FilmLook 开头", key.startswith("FilmLook_"))
     check(f"{key} 分类以 FilmLook 开头", cls.CATEGORY.startswith("FilmLook"), cls.CATEGORY)
 
+print("\n[3] 非法选项必须给出带可选值的报错（而不是裸 KeyError）")
+import torch  # noqa: E402
+
+tiny = torch.rand(1, 8, 8, 3, generator=torch.Generator().manual_seed(0))
+bad_calls = (
+    ("预设", lambda: maps["FilmLook_Color"]().execute(
+        tiny, "不存在的预设", 1.0, True, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0)),
+    ("颗粒档位", lambda: maps["FilmLook_Grain"]().execute(
+        tiny, "ISO 9999", "亮度颗粒 (保色彩)", 1.0, "均衡", 0.3, 0)),
+    ("渲染质量", lambda: maps["FilmLook_Grain"]().execute(
+        tiny, "标准 (ISO 400)", "亮度颗粒 (保色彩)", 1.0, "极限", 0.3, 0)),
+    ("光晕范围", lambda: maps["FilmLook_Halation"]().execute(tiny, 0.5, "巨大", True, 0.85)),
+)
+for tag, call in bad_calls:
+    try:
+        call()
+        check(f"{tag}：非法值被拦截", False, "没有抛错")
+    except ValueError as e:
+        check(f"{tag}：报错含可选值", "可选" in str(e), str(e)[:60] + "…")
+    except Exception as e:  # noqa: BLE001
+        check(f"{tag}：报错类型友好", False, f"{type(e).__name__}: {str(e)[:40]}")
+
 print("\n" + ("全部节点契约校验通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)

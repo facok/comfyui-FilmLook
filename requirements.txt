@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 torch
 numpy
 Pillow
@@ -6,4 +7,7 @@ Pillow
 #   pip install silvergrain[gpu]
 # 说明：需要 NVIDIA CUDA 显卡才有实用速度（CPU 渲染 1024x1024 约 159 秒）；
 # silvergrain 采用 AGPLv3 开源协议，商用前请确认协议合规。
-# 未安装时其余节点（调色 / LUT / 光晕）不受影响，可正常使用。
+# 未安装时其余节点（调色 / LUT / 光晕 / 镜头质感）不受影响，可正常使用。
+#
+# 首行的 coding 声明不是给 Python 看的，是给 pip 看的：requirements.txt 里含中文时，
+# 没有这个声明 pip 会按系统区域编码（中文 Windows 是 cp936）解码，注释会变成乱码。

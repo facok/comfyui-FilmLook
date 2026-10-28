@@ -129,9 +129,9 @@ def apply_grain(image, grain_level, grain_type, strength, quality, seed, sharpen
     得到一张静止的颗粒图（视频里表现为"颗粒黏在画面上不动"）。"""
     if float(strength) <= 0.0:
         return image  # 强度 0 = 原图：否则下面的锐度补偿仍会改动画面
-    radius_base = GRAIN_LEVELS[grain_level]
-    mode = GRAIN_TYPES[grain_type]
-    n_mc = QUALITY_LEVELS[quality]
+    radius_base = film_core.pick("颗粒档位", grain_level, GRAIN_LEVELS)
+    mode = film_core.pick("颗粒类型", grain_type, GRAIN_TYPES)
+    n_mc = film_core.pick("渲染质量", quality, QUALITY_LEVELS)
     if not torch.cuda.is_available():
         logger.warning("FilmLook: 未检测到 CUDA，silvergrain 使用 CPU 渲染会很慢（1024x1024 约 159 秒）。")
     frames = []

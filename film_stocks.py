@@ -51,7 +51,7 @@ def preset_tooltip():
 
 def preset_lut(name):
     """解析预设对应的 LUT（走 film_core 的解析缓存）；"自定义" 返回 None。"""
-    filename = FILM_STOCKS[name]["lut"]
+    filename = film_core.pick("胶片预设", name, FILM_STOCKS)["lut"]
     if not filename:
         return None
     return film_core.parse_cube(os.path.join(PRESET_DIR, filename))
@@ -59,6 +59,6 @@ def preset_lut(name):
 
 def preset_entry(name):
     """给 apply_film_color 用的 stock 字典：元数据 + 已解析的 table。"""
-    entry = dict(FILM_STOCKS[name])
+    entry = dict(film_core.pick("胶片预设", name, FILM_STOCKS))
     entry["table"] = preset_lut(name)
     return entry
