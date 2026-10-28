@@ -147,6 +147,7 @@ python tests/node_contract_test.py      # 节点注册表/签名/默认值/返�
 python tests/preset_character_test.py   # 预设描述与实测性格一致（文档即契约）
 python tests/grain_test.py              # 颗粒 seed 生效、逐帧/逐通道独立、强度 0 恒等
 python tests/edge_case_test.py          # 极端形状/超大图/参数边界/暗角与光晕几何
+python tests/generator_test.py          # LUT 生成器：通道朝向、灰阶单调、写读往返
 python tests/audit_quality.py           # 性能、显存、极端输入（需 CUDA）
 ```
 
@@ -165,9 +166,8 @@ python tests/audit_quality.py           # 性能、显存、极端输入（需 C
 - [x] **A**：预设改为直接应用 LUT（已完成）。
 - [ ] **B**：用 `spectral_film_lut`（MIT）的**方法论**从胶片数据手册自己生成 LUT，替换现有数据源，使"名称与数据同源"。
   - [x] 链路打通：负片（Portra 400 / Pro 400H / Gold 200 / 5219 / Ektar 100）+ 印片 **Kodak 2383**，走 `特性曲线 → 密度 → 印片 → 投影 → XYZ → LUT`，代码见 `tools/gen_film_luts.py`，数据见 `tools/filmdata/`（MIT，已附署名）。
-  - [x] 5 支彩色胶片能生成互不相同、物理合理的黑位与高光。
-  - [ ] 补 `output_transform`（高光 rolloff + 色域压缩）——当前高光 R 通道会先削顶。
-  - [ ] 白平衡降为"只校整体偏色"，保留各胶片的中间调色偏。
-  - [ ] 接上黑白链路（Tri-X + Kodak 2302）。
-  - [ ] 与参考 LUT 交叉验收后替换 `presets/`。
+  - [x] 5 支彩色胶片能生成互不相同、物理合理的黑位与高光；高光软滚降、通道朝向自检、写读往返测试齐备。
+  - [x] **结论**：这条"负片 + 2383 放映拷贝"路线与 `presets/` 里那条（更像负片扫描）**定位不同**——生成结果反差 0.81 vs 参考 0.43、暖度 +0.17 vs +0.01，且 5 支胶片的暖度只差 0.04（印片阶段盖过了胶片个性）。因此它不适合直接替换 `presets/`。
+  - [ ] 若继续 B：改走"负片 → 扫描"路线，并移植 barycentric NNLS 谱上采样（治本），否则复刻不出参考 LUT 的性格。
+  - [ ] 若不继续 B：按实测把预设中文名改准（`冷调电影感` 实际最暖、`浓郁鲜艳` 实际比原图淡）——纯文案改动，但会破坏已保存的工作流，需要确认。
 

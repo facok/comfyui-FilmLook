@@ -17,29 +17,39 @@ colour-science / scipy / pyqt。完整链路：
 ## 当前状态（2026-10）
 
 链路已跑通，5 支彩色胶片能生成**互不相同、物理合理**的黑位与高光（500T 黑位更沉、
-Ektar 高光偏蓝），灰阶严格单调、无 NaN，高光加了软滚降不再硬切顶。但**还不能替换
-`presets/`**，量化差距（Portra 对参考 LUT）：
+Ektar 高光偏蓝），灰阶严格单调、无 NaN，高光加了软滚降不再硬切顶，`assert_orientation`
+会在构建末尾自检通道朝向。但**还不能替换 `presets/`**。
 
-    765 色板色度均值：本工具 sat=1.0 时 0.314 / 参考 LUT 0.451 / 原图 0.556
-    sat=1.45 标定后 0.430、sat=1.5 时 0.453（与参考持平），此时与参考平均 |Δ| 0.27
+### 踩过的坑（都写进了测试，别重复）
 
-即裸生成结果**明显偏灰**，可用 `--sat` 补回色度；但色相与明暗关系仍与参考 LUT 有差别
-（两条路线不同，见下），所以还不能直接替换 `presets/`。已定位的主要缺口：
+- **write_cube 的轴序**：数据序必须是红变化最快。曾写成 `flat[bi, gi, ri]`，导致红蓝对调
+  ——纯红输入会输出 (0.455,0.223,0.751)。**灰阶完全正常、色板平均色度也不变**（互换等于
+  把输入集合重排，任何对称统计量都不变），只有原色探测和"写→读往返"能抓到。
+  现在 `assert_orientation` + `tests/generator_test.py` 双重兜底。
+- **planck() 返回绝对辐射值**（量级 1e31），只该当相对光谱用；未归一化会让曝光算出天量。
+- **输出定标点**：曾把 0.18 当线性值，实际 0.18 是 code value（线性 0.027），导致整体过曝。
 
-- **输入侧谱重建偏灰**：现在用 XYZ 的最小范数谱重建，天然把颜色拉向灰。参考实现用
-  barycentric NNLS 上采样，色彩分离度更高。这是色度偏低的根源，`--sat` 只是标定补偿。
-  曾试过改用"显示原色高斯谱"重建，结果更灰（0.264），已回退。
-- **光谱密度拆分太粗**：参考实现用密度曲线局部极值 + 高斯软掩膜拆 R/G/B 三层；
-  这里是 500/600nm 硬切分 + 3 点盒式平滑。
+### 与参考 LUT 的差距（Portra，765 色板）
+
+    色度比：本工具 0.80 / 参考 0.81    暖度：+0.17 / +0.01    反差：0.81 / 0.43
+
+即生成结果的**反差高得多（0.81 vs 0.43）、整体偏暖（+0.17 vs +0.01）**，且 5 支胶片的
+暖度只在 +0.15~+0.19 之间，区分度远小于参考预设（+0.01~+0.16）。已定位的主要缺口：
+
+- **印片阶段盖过了胶片个性**：2383 的染料组与打印机灯光决定了成片底色，负片之间的差异
+  被压平。这是"负片 + 放映拷贝"这条路线本身的特性，不是 bug。
+- **输入侧谱重建偏灰**：用 XYZ 最小范数谱重建，天然拉向灰；参考实现用 barycentric NNLS
+  上采样。`--sat` 只是标定补偿（0.314 → 0.43~0.45）。
 - **`output_transform` 未完整移植**：参考实现有 OkLab 饱和度调整、2.5D xy LUT 色域映射、
   亮度恢复、可选 Reinhard rolloff；这里只有线性投影 + 中灰定标 + 简单滚降。
-- **中灰被过度统一**：色度白平衡把所有预设的中灰拉成同一个值，抹掉了胶片间的色偏差异。
 - **黑白片未接**：Tri-X（负片）+ 2302（印片）走标量密度的另一条链路。
-- 与 `presets/` 里的参考 LUT 路线不同（那 6 条像"负片扫描"，本工具是"负片 + 2383 放映
-  拷贝"），不能期望逐点接近，应按"性格是否对"来验收。
 
-下一步优先级：移植 barycentric NNLS 上采样（治本）→ 精修光谱密度拆分 → 补 output_transform
-→ 接 BW → 与参考 LUT 做性格验收。
+### 结论
+
+要让"名字与观感一致"，**换路线比调参数更根本**：参考 LUT 更像"负片扫描"路线（扫描仪 +
+反相 + 色彩管理），本工具是"负片 + 2383 放映拷贝"路线，两者反差与色调定位本就不同。
+若目标是复刻参考 LUT 的性格，应改走扫描路线；若要的是"真实放映拷贝味"，则应调整
+`presets/` 的中文名去匹配它。后者不需要改代码，只需要改文案。
 
 用法（离线，不参与插件运行时）：
     python tools/gen_film_luts.py --list
@@ -281,16 +291,38 @@ def build_lut(neg, prt, size=33, projector_kelvin=6500, white_balance=True, satu
     return out.reshape(size, size, size, 3)
 
 
+def assert_orientation(lut):
+    """自检：LUT 的通道朝向是否正确。
+
+    注意：**色板平均色度/暖度对"红蓝互换"是不变量**——互换相当于把输入集合重排，
+    均值不变，所以这类错误只能靠原色探测发现。灰阶更是完全看不出来（r=g=b 对称）。
+    实测教训：write_cube 曾把索引写成 [b,g,r]，纯红输入会输出蓝色，而色板统计毫无变化。
+    """
+    n = lut.shape[0]
+    hi = n - 1
+    red = lut[hi, 0, 0]
+    green = lut[0, hi, 0]
+    blue = lut[0, 0, hi]
+    assert red[0] > red[1] and red[0] > red[2], f"红轴朝向错误：纯红 → {red}"
+    assert green[1] > green[0] and green[1] > green[2], f"绿轴朝向错误：纯绿 → {green}"
+    assert blue[2] > blue[0] and blue[2] > blue[1], f"蓝轴朝向错误：纯蓝 → {blue}"
+
+
 def write_cube(path, lut, title):
+    """写出 .cube。数据序必须是**红变化最快**：外层 b、中层 g、内层 r。
+
+    lut 的形状是 (size, size, size, 3)，索引顺序为 [r, g, b]（由 meshgrid(indexing="ij")
+    生成），所以内层循环取 r 时要用 flat[ri, gi, bi]——写成 flat[bi, gi, ri] 会把红蓝
+    轴对调：实测纯红输入会输出 (0.455,0.223,0.751) 这样的蓝色，灰阶却看不出问题，
+    非常隐蔽。
+    """
     size = lut.shape[0]
     lines = [f'TITLE "{title}"', f"LUT_3D_SIZE {size}",
              "DOMAIN_MIN 0.0 0.0 0.0", "DOMAIN_MAX 1.0 1.0 1.0", ""]
-    # .cube 数据序：红变化最快
-    flat = lut.reshape(size, size, size, 3)          # [b, g, r]
     for bi in range(size):
         for gi in range(size):
             for ri in range(size):
-                c = flat[bi, gi, ri]
+                c = lut[ri, gi, bi]
                 lines.append(f"{c[0]:.6f} {c[1]:.6f} {c[2]:.6f}")
     pathlib.Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
