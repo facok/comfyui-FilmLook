@@ -61,6 +61,10 @@
 
 **预设就是一条 3D LUT。** 节点把 `.cube` 直接应用到画面，不再用参数化模型去逼近——拟合会丢掉 LUT 的性格：实测用 12 参数模型逼近参考 LUT，765 色板平均偏差 0.04~0.08、95 分位最高 0.25，Vision3 500T 的天空色度被从 0.235 放大到 0.559（2.4 倍）。改为直接查表后，预设输出与参考 LUT 的差异是 1e-7（浮点噪声）。LUT 本体放在 `presets/`，来源与许可（含 CC BY-SA 提示）见 `presets/LICENSE.md`。
 
+![六个预设的对照（合成场景：夜空 + 路灯高光 + 肤色块 + 中性灰墙 + 三原色块 + 底部 16 级灰阶）](docs/presets.png)
+
+> 同一张合成场景过一遍各预设（`strength=1`、参数全默认）。场景里刻意放了胶片最敏感的四样东西：中性灰墙面看黑位与色偏、肤色块看肤色是否发灰、路灯看高光滚降、底部灰阶看反差与暗部层次。图由 `tools/make_preset_sheet.py` 生成。
+
 下表的「实测性格」不是照胶片名声写的，而是量出来的（`tests/preset_character_test.py` 会把这张表当契约校验，换 LUT 或改管线都会让它失败）：
 
 | 预设 | 实测性格 | 色度/原图 | 暖度 R−B | LUT 文件 | 来源 |
@@ -172,7 +176,7 @@ python tests/audit_quality.py           # 性能、显存、极端输入（需 C
 python tests/demo_render.py             # 非测试：把合成场景跑一遍各预设，出 PNG 供目检
 ```
 
-`tools/` 下是离线工具，不参与运行时：`gen_film_luts.py`（从胶片数据手册生成 LUT，实验性，状态见文件头）、`index_luts.py`（重新生成 `luts/README.md` 索引）。
+`tools/` 下是离线工具，不参与运行时：`gen_film_luts.py`（从胶片数据手册生成 LUT，实验性，状态见文件头）、`index_luts.py`（重新生成 `luts/README.md` 索引）、`make_preset_sheet.py`（重新生成 `docs/presets.png` 预设对照图）。
 
 ## 许可
 
