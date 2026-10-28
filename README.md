@@ -143,6 +143,7 @@ A：不会。每一帧都用 `seed` 与帧号派生出的独立种子重新渲�
 ```bash
 python tests/smoke_test.py              # 五个节点跑通、形状/值域/NaN
 python tests/param_direction_test.py    # 色温/色调的方向、互反、亮度守恒
+python tests/node_contract_test.py      # 节点注册表/签名/默认值/返回声明的一致性
 python tests/preset_character_test.py   # 预设描述与实测性格一致（文档即契约）
 python tests/grain_test.py              # 颗粒 seed 生效、逐帧/逐通道独立、强度 0 恒等
 python tests/edge_case_test.py          # 极端形状/超大图/参数边界/暗角与光晕几何
