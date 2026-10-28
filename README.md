@@ -78,7 +78,9 @@
 
 ### FilmLook LUT 应用
 
-支持两种格式：标准 `.cube`（LUT_1D_SIZE / LUT_3D_SIZE）和 **HaldCLUT `.png`**（8/16-bit RGB，level 自动识别）。`luts/` 目录自带上述 6 个参考 `.cube`（MIT 协议，作者 PopTech Studio），可直接在下拉框选用。
+支持两种格式：标准 `.cube`（LUT_1D_SIZE / LUT_3D_SIZE）和 **HaldCLUT `.png`**（8/16-bit RGB，level 自动识别）。
+
+`luts/` 是自带的 LUT 库（默认 125 个 `.cube`，可自由增删），下拉框会自动列出该目录下的全部文件。**这个目录里的文件是用户自行收集的，来源与许可由收集者负责**，与本插件的预设无关；预设用的 6 条 LUT 单独放在 `presets/`，许可见 `presets/LICENSE.md`。
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
@@ -105,6 +107,18 @@
 | quality | 均衡 | 渲染质量：速度优先 / 均衡 / 画质优先 |
 | sharpen | 0.3 | 锐度补偿：颗粒的光学特性会轻微柔化画面，此项加回线条锐度；0 关闭 |
 | seed | 0 | 随机种子；同一批次每帧自动重新采样，视频不会出现"静止颗粒" |
+
+### FilmLook 镜头质感
+
+两个滑杆，模拟老镜头的光学缺陷。默认值都足够轻，**可以单独用在任何图像上**，不依赖其它节点。
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| diffusion | 0.25 | 柔光强度：高光向周围弥散，模拟黑柔镜/柔焦滤镜；0 关闭 |
+| vignette | 0.25 | 暗角强度：四角向中心压暗，引导视线；0 关闭 |
+
+> 柔光的模糊尺度按画面短边计算，**竖幅和横幅的观感一致**（早期版本按高度算，竖图会强 1.8 倍）。
+> 暗角以像素中心为坐标，1×1、512×1 这类极端形状也不会偏向一角。
 
 ### FilmLook 一键胶片
 
@@ -147,6 +161,7 @@ python tests/node_contract_test.py      # 节点注册表/签名/默认值/返�
 python tests/preset_character_test.py   # 预设描述与实测性格一致（文档即契约）
 python tests/grain_test.py              # 颗粒 seed 生效、逐帧/逐通道独立、强度 0 恒等
 python tests/edge_case_test.py          # 极端形状/超大图/参数边界/暗角与光晕几何
+python tests/readme_drift_test.py       # README 参数表与节点真实输入双向一致
 python tests/generator_test.py          # LUT 生成器：通道朝向、灰阶单调、写读往返
 python tests/audit_quality.py           # 性能、显存、极端输入（需 CUDA）
 ```
