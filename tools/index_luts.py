@@ -31,9 +31,11 @@ INDEX = LUTS / "README.md"
 
 _spec = importlib.util.spec_from_file_location(
     "comfyui_FilmLook", PKG / "__init__.py", submodule_search_locations=[str(PKG)])
-_fc_mod = importlib.util.module_from_spec(_spec)
-sys.modules["comfyui_FilmLook"] = _fc_mod
-_spec.loader.exec_module(_fc_mod)
+_fc_mod = sys.modules.get("comfyui_FilmLook")
+if _fc_mod is None:
+    _fc_mod = importlib.util.module_from_spec(_spec)
+    sys.modules["comfyui_FilmLook"] = _fc_mod
+    _spec.loader.exec_module(_fc_mod)
 fc = _fc_mod.film_core
 
 # 分组规则：先匹配更具体的，最后落到「其它」

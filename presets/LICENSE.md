@@ -7,10 +7,11 @@
 |---|---|---|---|
 | `portra_400.cube` | 清新人像 (Portra 400) | [YahiaAngelo/Film-Luts](https://github.com/YahiaAngelo/Film-Luts) 分发的 G'MIC / Natron Pat David 胶片模拟集 | **CC BY-SA** |
 | `fuji_400h.cube` | 日系空气感 (Fuji 400H) | 同上 | **CC BY-SA** |
-| `ektar_100.cube` | 浓郁鲜艳 (Ektar) | G'MIC 生成（文件头 `Created by: G'MIC`） | **CC BY-SA** |
+| `ektar_100.cube` | 自然淡彩 (Ektar 100) | G'MIC 生成（文件头 `Created by: G'MIC`） | **CC BY-SA** |
 | `trix_400.cube` | 黑白纪实 (Tri-X) | G'MIC 生成（文件头 `Created by: G'MIC`） | **CC BY-SA** |
 | `kodak_gold_200_warm.cube` | 暖阳金调 (Kodak Gold) | [dazz-retro-camera](https://github.com/ganjmeng/dazz-retro-camera)（`flutter_app/assets/lut/cameras/`，仓库根 LICENSE 为 MIT） | MIT |
-| `vision3_500t.cube` | 冷调电影感 (Vision3 500T) | [poptechstudio/ai-cinema-studio-engine](https://github.com/poptechstudio/ai-cinema-studio-engine) | MIT |
+| `vision3_500t.cube` | 夜景暖调 (Vision3 500T) | [poptechstudio/ai-cinema-studio-engine](https://github.com/poptechstudio/ai-cinema-studio-engine) | MIT |
+| `cool_cinema.cube` | 冷调电影感 (Eterna 250D) | **本插件生成**：以 MIT 的 `luts/fuji_eterna_250d.cube` 为底，按 `tools/make_cool_lut.py` 做冷调分级 | 随插件代码（基底仍为 MIT） |
 
 ## 注意：CC BY-SA 的传染性
 
@@ -22,7 +23,7 @@
 
 插件代码本身不受影响；受约束的是这 4 个数据文件。如果不想承担这个约束，可以：
 
-- 只保留 `kodak_gold_200_warm.cube` 与 `vision3_500t.cube`（两条 MIT），其余预设暂时移除；
+- 只保留 `kodak_gold_200_warm.cube`、`vision3_500t.cube` 与 `cool_cinema.cube`（三条 MIT 系），其余预设暂时移除；
 - 或者用 `tools/gen_film_luts.py`（B 阶段，实验性）从胶片数据手册重新生成同名预设。
 
 ## 数据格式

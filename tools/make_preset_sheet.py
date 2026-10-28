@@ -24,9 +24,11 @@ OUT = PKG / "docs" / "presets.png"
 
 _spec = importlib.util.spec_from_file_location(
     "comfyui_FilmLook", PKG / "__init__.py", submodule_search_locations=[str(PKG)])
-mod = importlib.util.module_from_spec(_spec)
-sys.modules["comfyui_FilmLook"] = mod
-_spec.loader.exec_module(mod)
+mod = sys.modules.get("comfyui_FilmLook")
+if mod is None:
+    mod = importlib.util.module_from_spec(_spec)
+    sys.modules["comfyui_FilmLook"] = mod
+    _spec.loader.exec_module(mod)
 
 PANEL_W, PANEL_H = 384, 256
 LABEL_H = 30
