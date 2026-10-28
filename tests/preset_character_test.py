@@ -94,10 +94,10 @@ check("夜景暖调「偏暖」", M["夜景暖调 (Vision3 500T)"]["warm"] > 0.1
 check("夜景暖调「中等饱和」", 0.80 <= M["夜景暖调 (Vision3 500T)"]["ratio"] <= 1.05,
       f"ratio={M['夜景暖调 (Vision3 500T)']['ratio']:.2f}")
 
-check("冷调电影感「偏冷」", M["冷调电影感 (Eterna 250D)"]["warm"] < -0.03,
-      f"warm={M['冷调电影感 (Eterna 250D)']['warm']:+.3f}")
-check("冷调电影感「中等饱和」", 0.85 <= M["冷调电影感 (Eterna 250D)"]["ratio"] <= 1.10,
-      f"ratio={M['冷调电影感 (Eterna 250D)']['ratio']:.2f}")
+check("冷调电影感「偏冷」", M["冷调电影感 (青蓝)"]["warm"] < -0.03,
+      f"warm={M['冷调电影感 (青蓝)']['warm']:+.3f}")
+check("冷调电影感「中等饱和」", 0.85 <= M["冷调电影感 (青蓝)"]["ratio"] <= 1.10,
+      f"ratio={M['冷调电影感 (青蓝)']['ratio']:.2f}")
 
 check("自然淡彩「比原图略淡」", M["自然淡彩 (Ektar 100)"]["ratio"] < 0.90,
       f"ratio={M['自然淡彩 (Ektar 100)']['ratio']:.2f}")
@@ -111,8 +111,8 @@ print("[3] 全表排序断言（防止换错 LUT）")
 check("Vision3 500T 是全场最暖",
       M["夜景暖调 (Vision3 500T)"]["warm"] >= max(v["warm"] for v in M.values()))
 check("Eterna 冷调是全场最冷",
-      M["冷调电影感 (Eterna 250D)"]["warm"] <= min(v["warm"] for v in M.values()),
-      f"{M['冷调电影感 (Eterna 250D)']['warm']:+.3f}")
+      M["冷调电影感 (青蓝)"]["warm"] <= min(v["warm"] for v in M.values()),
+      f"{M['冷调电影感 (青蓝)']['warm']:+.3f}")
 check("至少有一条预设真正偏冷（暖度为负）",
       min(v["warm"] for v in M.values()) < -0.02,
       f"最冷 {min(v['warm'] for v in M.values()):+.3f}")

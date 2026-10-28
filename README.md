@@ -72,7 +72,7 @@
 | 清新人像 (Portra 400) | 低反差、轻微降饱和，色调近中性 | 0.81× | +0.01 | `presets/portra_400.cube` | G'MIC（CC BY-SA） |
 | 日系空气感 (Fuji 400H) | 低饱和、通透，中调偏暖 | 0.77× | +0.07 | `presets/fuji_400h.cube` | G'MIC（CC BY-SA） |
 | 暖阳金调 (Kodak Gold) | 暖调，彩色预设里反差与饱和最高 | 1.06× | +0.04 | `presets/kodak_gold_200_warm.cube` | dazz-retro-camera（MIT） |
-| 冷调电影感 (Eterna 250D) | **青蓝暗部、中性高光，肤色仍暖**；全套唯一偏冷的一条 | 0.96× | **−0.07** | `presets/cool_cinema.cube` | 本插件合成（基底 Eterna 250D，MIT） |
+| 冷调电影感 (青蓝) | **青蓝暗部、中性高光，肤色仍暖**；全套唯一偏冷的一条 | 0.98× | **−0.09** | `presets/cool_cinema.cube` | 本插件算法合成（`tools/make_look_lut.py`） |
 | 夜景暖调 (Vision3 500T) | 明显偏暖、中等饱和；路灯/夜景最对味 | 0.91× | **+0.16** | `presets/vision3_500t.cube` | poptechstudio（MIT） |
 | 自然淡彩 (Ektar 100) | 色调中性偏冷，比原图更淡；日常/静物 | 0.79× | +0.02 | `presets/ektar_100.cube` | G'MIC（CC BY-SA） |
 | 黑白纪实 (Tri-X) | 高反差黑白，灰轴中性 | — | 0.00 | `presets/trix_400.cube` | G'MIC（CC BY-SA） |

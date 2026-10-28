@@ -11,7 +11,7 @@
 | `trix_400.cube` | 黑白纪实 (Tri-X) | G'MIC 生成（文件头 `Created by: G'MIC`） | **CC BY-SA** |
 | `kodak_gold_200_warm.cube` | 暖阳金调 (Kodak Gold) | [dazz-retro-camera](https://github.com/ganjmeng/dazz-retro-camera)（`flutter_app/assets/lut/cameras/`，仓库根 LICENSE 为 MIT） | MIT |
 | `vision3_500t.cube` | 夜景暖调 (Vision3 500T) | [poptechstudio/ai-cinema-studio-engine](https://github.com/poptechstudio/ai-cinema-studio-engine) | MIT |
-| `cool_cinema.cube` | 冷调电影感 (Eterna 250D) | **本插件生成**：以 MIT 的 `luts/fuji_eterna_250d.cube` 为底，按 `tools/make_cool_lut.py` 做冷调分级 | 随插件代码（基底仍为 MIT） |
+| `cool_cinema.cube` | 冷调电影感 (青蓝) | **本插件原创**：由 `tools/make_look_lut.py` 纯算法合成（胶片曲线 + 乘性冷调分级），不依赖任何第三方 LUT | 随插件代码 |
 
 ## 注意：CC BY-SA 的传染性
 
