@@ -89,22 +89,19 @@ def apply_contrast(lin, contrast, pivot=0.18):
 
 
 def apply_vibrance(lin, saturation):
-    if not torch.is_tensor(saturation):
-        if abs(saturation - 1.0) < 1e-6:
-            return lin
-        lum = luminance(lin)
-        if saturation < 1.0:
-            return lum + (lin - lum) * saturation
-        spread = lin.amax(dim=-1, keepdim=True) - lin.amin(dim=-1, keepdim=True)
-        boost = 1.0 + (saturation - 1.0) * (1.0 - spread).clamp(0.0, 1.0)  # 灰暗像素增益更多，保护肤色
-        return lum + (lin - lum) * boost
-    # tensor 分支（标定拟合用）：两档写成单一可微表达式，saturation=1 处连续
-    lum = luminance(lin)
-    spread = lin.amax(dim=-1, keepdim=True) - lin.amin(dim=-1, keepdim=True)
-    factor = torch.where(saturation < 1.0, saturation,
-                         1.0 + (saturation - 1.0) * (1.0 - spread).clamp(0.0, 1.0))
-    return lum + (lin - lum) * factor
+    """自然饱和度：降饱和是全线等比；升饱和只加在"颜色本来就淡"的像素上，
+    已经很鲜艳的地方几乎不动，所以肤色不容易被推爆。
 
+    （这里不再保留 tensor 分支——那是给已删除的参数拟合脚本求梯度用的。）
+    """
+    if abs(float(saturation) - 1.0) < 1e-6:
+        return lin
+    lum = luminance(lin)
+    if saturation < 1.0:
+        return lum + (lin - lum) * float(saturation)
+    spread = lin.amax(dim=-1, keepdim=True) - lin.amin(dim=-1, keepdim=True)
+    boost = 1.0 + (float(saturation) - 1.0) * (1.0 - spread).clamp(0.0, 1.0)
+    return lum + (lin - lum) * boost
 
 def apply_temp_tint(lin, temperature, tint, amount=0.30):
     """色温 / 色调：线性域亮度守恒增益（白平衡语义，与 Lightroom 同向）。
