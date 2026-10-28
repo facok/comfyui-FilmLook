@@ -1,0 +1,308 @@
+# -*- coding: utf-8 -*-
+"""从胶片数据手册生成 film-look 3D LUT（**实验性，尚未接入运行时预设**）。
+
+方法参考 JanLohse/spectral_film_lut（MIT）的实现思路，用 numpy/torch 自行实现，不依赖
+colour-science / scipy / pyqt。完整链路：
+
+    sRGB → 线性 → XYZ → 负片各层 log 曝光 → 负片特性曲线 → 负片密度 D⁻
+         → 透过率 T = 10^(−D⁻·SD⁻ᵀ)
+         → 印片曝光 E⁺ = T · (S⁺·printer_light·10^(−d_min⁻))
+         → 印片特性曲线 → 印片密度 D⁺
+         → 投影 XYZ = 10^(−D⁺·SD⁺ᵀ) · (CMF·光源·10^(−d_min⁺))
+         → 白平衡到中灰 → sRGB → .cube
+
+负片密度直接投影会得到"底片"（越亮越暗），必须过印片这一道——这是本工具与
+"拿一条 LUT 反推参数" 的本质区别。
+
+## 当前状态（2026-10）
+
+链路已跑通，5 支彩色胶片能生成**互不相同、物理合理**的黑位与高光（500T 黑位更沉、
+Ektar 高光偏蓝），但还没达到可替换 `presets/` 的质量：
+
+- **高光削顶**：参考实现有一整套 `output_transform`（Rec.709/2383 的显示映射 + 高光
+  rolloff + 色域压缩），这里只做了线性投影 + 中灰定标，导致高光 R 通道先到 1.0。
+- **中灰被过度统一**：色度白平衡把所有预设的中灰都拉成同一个值，抹掉了胶片间的色偏
+  差异；应改为只校正整体偏色，保留各胶片的中间调色偏。
+- **黑白片未接**：Tri-X（负片）+ 2302（印片）走的是另一条 BW 链路（标量密度），
+  当前代码路径未实现。
+- **与现有参考 LUT 不可比**：`presets/` 里那 6 条看起来是"负片扫描"路线（中性、无印片
+  偏色），而本工具是"负片 + 2383 放映拷贝"路线，两者性格本就不同，不能直接逐点对比。
+
+下一步：补 output_transform（高光 rolloff + 色域压缩）、把白平衡降为"只校整体偏色"、
+接上 BW 链路，然后用 `presets/*.cube` 与参考 LUT 做交叉验收。
+
+用法（离线，不参与插件运行时）：
+    python tools/gen_film_luts.py --list
+    python tools/gen_film_luts.py --stock portra_400 --size 33 --out <输出目录>
+"""
+
+import argparse
+import math
+import pathlib
+import sys
+import types
+
+import numpy as np
+
+HERE = pathlib.Path(__file__).resolve().parent
+FILMDATA = HERE / "filmdata"
+
+WL = np.arange(380.0, 781.0, 10.0)          # 41 个采样，与参考实现 SPECTRAL_SHAPE 一致
+LAD_NEGATIVE = np.array([0.78, 0.84, 0.79])  # 中灰在印片中间密度上的参考值
+
+# 预设 → (负片数据模块, 类名, 印片模块, 印片类名)
+STOCKS = {
+    "portra_400": ("kodak_portra_400", "KODAK_PORTRA_400", "kodak_2383", "KODAK_2383"),
+    "fuji_400h": ("fuji_pro_400h", "FUJI_PRO_400H", "kodak_2383", "KODAK_2383"),
+    "kodak_gold_200_warm": ("kodak_gold_200", "KODAK_GOLD_200", "kodak_2383", "KODAK_2383"),
+    "vision3_500t": ("kodak_5219", "KODAK_5219", "kodak_2383", "KODAK_2383"),
+    "ektar_100": ("kodak_ektar_100", "KODAK_EKTAR_100", "kodak_2383", "KODAK_2383"),
+    "trix_400": ("kodak_trix_400", "KODAK_TRI_X_400", "kodak_2302", "KODAK_2302"),
+}
+
+
+# ---------------------------------------------------------------- 光谱基础
+def _g(x, mu, s1, s2):
+    s = np.where(x < mu, s1, s2)
+    return np.exp(-0.5 * ((x - mu) / s) ** 2)
+
+
+def cie1931(wl):
+    """Wyman 2013 对 CIE 1931 2° 配色函数的解析拟合。"""
+    x = (1.056 * _g(wl, 599.8, 37.9, 31.0) + 0.362 * _g(wl, 442.0, 16.0, 26.7)
+         - 0.065 * _g(wl, 501.1, 20.4, 26.2))
+    y = 0.821 * _g(wl, 568.8, 46.9, 40.5) + 0.286 * _g(wl, 530.9, 16.3, 31.1)
+    z = 1.217 * _g(wl, 437.0, 11.8, 36.0) + 0.681 * _g(wl, 459.0, 26.0, 13.8)
+    return np.stack([x, y, z], axis=-1)
+
+
+CMF = cie1931(WL)
+XYZ2RGB = np.array([[3.2406, -1.5372, -0.4986],
+                    [-0.9689, 1.8758, 0.0415],
+                    [0.0557, -0.2040, 1.0570]])
+RGB2XYZ = np.linalg.inv(XYZ2RGB)
+
+
+def planck(wl_nm, kelvin):
+    """普朗克黑体谱，归一化成相对光谱分布（只用形状，量级无意义）。"""
+    c2 = 1.4388e-2
+    lam = wl_nm * 1e-9
+    p = 1.0 / (lam ** 5 * (np.exp(c2 / (lam * kelvin)) - 1.0))
+    return p / p.max()
+
+
+def srgb_to_linear(x):
+    x = np.clip(x, 0, None)
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+def linear_to_srgb(x):
+    x = np.clip(x, 0, None)
+    return np.where(x <= 0.0031308, x * 12.92, 1.055 * x ** (1 / 2.4) - 0.055)
+
+
+def align(sd):
+    """{波长: 值} → 41 点数组（线性内插 + 端点外延）。"""
+    keys = np.array(sorted(sd.keys()), dtype=float)
+    vals = np.array([sd[k] for k in sorted(sd.keys())], dtype=float)
+    return np.interp(WL, keys, vals)
+
+
+# ---------------------------------------------------------------- 胶片模型
+def load_film(module_name, cls_name):
+    """执行数据手册模块（只含 FilmData 构造），返回其字段字典。"""
+    pkg = types.ModuleType("spectral_film_lut")
+    pkg.__path__ = []
+    fd = types.ModuleType("spectral_film_lut.film_data")
+    fd.FilmData = lambda **kw: kw
+    pkg.film_data = fd
+    sys.modules["spectral_film_lut"] = pkg
+    sys.modules["spectral_film_lut.film_data"] = fd
+    path = FILMDATA / f"{module_name}.py"
+    mod = types.ModuleType(module_name)
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), mod.__dict__)
+    return getattr(mod, cls_name)
+
+
+class Film:
+    """把 FilmData 整理成生成 LUT 需要的数值形态。"""
+
+    def __init__(self, data):
+        self.name = data["name"]
+        self.iso = data.get("iso")
+        self.density_measure = data.get("density_measure")
+        self.d_min = None
+
+        # 灵敏度：10**log_sensitivity，按峰值归一
+        sens = np.stack([align(s) for s in data["log_sensitivity"]], axis=1)
+        sens = 10 ** sens
+        self.sensitivity = sens / sens.max(axis=0, keepdims=True)
+
+        # 特性曲线（logH → 密度），减去 d_min 并重采样到统一网格
+        curves, dmins = [], []
+        for c in data["sensiometric_curve"]:
+            xs = np.array(sorted(c.keys()), dtype=float)
+            ys = np.array([c[k] for k in sorted(c.keys())], dtype=float)
+            curves.append((xs, ys))
+            dmins.append(ys.min())
+        self.d_min = np.array(dmins)
+        grid = np.linspace(min(x.min() for x, _ in curves), max(x.max() for x, _ in curves), 2048)
+        self.curve_x = grid
+        self.curve_y = np.stack([
+            np.interp(grid, xs, ys - d) for (xs, ys), d in zip(curves, dmins)
+        ], axis=1)                                   # (2048, 3)
+
+        # 光谱密度：优先用数据里直接给的 spectral_density（印片常见），
+        # 否则把 d_ref_sd−d_min_sd 拆成 R/G/B 三个波段（相机负片常见）
+        self.is_bw = data.get("density_measure") == "bw"
+        if data.get("spectral_density"):
+            self.spectral_density = np.stack([align(d) for d in data["spectral_density"]], axis=0)
+            self.d_min_sd = align(data["d_min_sd"]) if data.get("d_min_sd") else np.zeros(WL.size)
+        else:
+            d_min_sd = align(data["d_min_sd"]) if data.get("d_min_sd") else np.zeros(WL.size)
+            ramp = np.clip(align(data["d_ref_sd"]) - d_min_sd, 0, None)
+            band = np.zeros((3, WL.size))
+            band[0, WL >= 600] = 1.0
+            band[1, (WL >= 500) & (WL < 600)] = 1.0
+            band[2, WL < 500] = 1.0
+            band = np.stack([np.convolve(b, np.ones(3) / 3, mode="same") for b in band])
+            self.spectral_density = band * ramp[None, :] / np.clip(
+                (band * ramp[None, :]).max(axis=1, keepdims=True), 1e-6, None)
+            self.d_min_sd = d_min_sd
+
+        if self.iso is not None:
+            # 相机片：中灰曝光由 ISO 决定
+            self.log_H_ref = np.full(3, math.log10(12.5 / self.iso))
+        elif data.get("lad"):
+            # 印片：中灰由 LAD 密度反查特性曲线
+            self.log_H_ref = np.array([np.interp(lad, self.curve_y[:, i], self.curve_x)
+                                       for i, lad in enumerate(data["lad"])])
+        else:
+            self.log_H_ref = np.zeros(3)
+        self.H_ref = 10 ** self.log_H_ref
+
+        # 中灰处的光谱密度（印片用）
+        self.d_ref = self._density(self.log_H_ref)
+        self.d_ref_sd = (self.d_ref[:, None] * self.spectral_density).sum(axis=0) + self.d_min_sd
+
+    def _density(self, log_e):
+        """log 曝光 → 密度（逐层线性内插），保持输入形状。"""
+        log_e = np.asarray(log_e, dtype=float)
+        orig = log_e.shape
+        e2 = log_e.reshape(-1, 3)
+        out = np.stack([np.interp(e2[:, i], self.curve_x, self.curve_y[:, i])
+                        for i in range(3)], axis=1)
+        return out.reshape(orig)
+
+
+# ---------------------------------------------------------------- 管线
+def printer_light(neg, prt, kelvin=3200.0):
+    """求印片灯光谱，使负片中灰印到印片基准曝光（中性）。
+
+    参考实现用三色滤光片光谱做基；这里用普朗克灯光 × 三个宽波段近似，再解线性方程组，
+    语义一致：让 d_ref 的负片在印片上落在 log_H_ref。
+    """
+    lamp = planck(WL, kelvin)
+    bands = np.stack([np.exp(-0.5 * ((WL - c) / 40.0) ** 2) for c in (450.0, 540.0, 610.0)], axis=1)
+    basis = lamp[:, None] * bands                        # (41,3)
+    reduced = (basis.T * 10 ** -neg.d_ref_sd).T          # (41,3)
+    factors = np.linalg.solve(prt.sensitivity.T @ reduced, prt.H_ref)
+    return basis @ factors
+
+
+def build_lut(neg, prt, size=33, projector_kelvin=6500, white_balance=True):
+    """生成 size³ 的 sRGB→sRGB LUT。"""
+    xyz2rgb = XYZ2RGB
+
+    # 输入：XYZ → 负片层曝光。最小范数谱重建假设下的 3x3
+    pinv_cmf = CMF @ np.linalg.inv(CMF.T @ CMF)          # (41,3)
+    M_in = (neg.sensitivity * planck(WL, 5500)[:, None]).T @ pinv_cmf   # (3,3)
+    neutral_xyz = np.array([0.95047, 1.0, 1.08883]) * 0.18
+    M_in = M_in * (10 ** neg.log_H_ref[1]) / float((M_in @ neutral_xyz)[1])
+
+    # 印片曝光矩阵
+    pl = printer_light(neg, prt)
+    printing_mat = (prt.sensitivity.T * pl * 10 ** -neg.d_min_sd).T      # (41,3)
+
+    # 投影矩阵
+    proj = planck(WL, projector_kelvin)
+    output_mat = (CMF.T * proj * 10 ** -prt.d_min_sd).T                  # (41,3)
+
+    grid = np.linspace(0, 1, size)
+    r, g, b = np.meshgrid(grid, grid, grid, indexing="ij")
+    rgb_in = np.stack([r, g, b], axis=-1).reshape(-1, 3)
+    xyz = srgb_to_linear(rgb_in) @ RGB2XYZ.T
+
+    log_e = np.log10(np.clip(xyz @ M_in.T, 1e-7, None))
+    d_neg = neg._density(log_e)
+    t_neg = 10 ** -(d_neg @ neg.spectral_density)
+    log_e_print = np.log10(np.clip(t_neg @ printing_mat, 1e-6, None))
+    d_prt = prt._density(log_e_print)
+    xyz_out = 10 ** -(d_prt @ prt.spectral_density) @ output_mat
+
+    # 输出定标：让 sRGB 0.5（线性 0.214≈中灰）印出来落在 Y=0.18，并做色度白平衡
+    g5 = srgb_to_linear(np.array([[0.5, 0.5, 0.5]])) @ RGB2XYZ.T
+    le = np.log10(np.clip(g5 @ M_in.T, 1e-7, None))
+    dn = neg._density(le)
+    ln = np.log10(np.clip(10 ** -(dn @ neg.spectral_density) @ printing_mat, 1e-6, None))
+    dp = prt._density(ln)
+    white = (10 ** -(dp @ prt.spectral_density) @ output_mat).reshape(3)
+    xyz_out = xyz_out * (0.18 / max(float(white[1]), 1e-8))
+    if white_balance:
+        xyz_out = xyz_out * (white[1] / np.clip(white, 1e-8, None))
+
+    rgb_out = np.clip(xyz_out @ xyz2rgb.T, 0, None)
+    out = np.clip(linear_to_srgb(rgb_out), 0, 1)
+    return out.reshape(size, size, size, 3)
+
+
+def write_cube(path, lut, title):
+    size = lut.shape[0]
+    lines = [f'TITLE "{title}"', f"LUT_3D_SIZE {size}",
+             "DOMAIN_MIN 0.0 0.0 0.0", "DOMAIN_MAX 1.0 1.0 1.0", ""]
+    # .cube 数据序：红变化最快
+    flat = lut.reshape(size, size, size, 3)          # [b, g, r]
+    for bi in range(size):
+        for gi in range(size):
+            for ri in range(size):
+                c = flat[bi, gi, ri]
+                lines.append(f"{c[0]:.6f} {c[1]:.6f} {c[2]:.6f}")
+    pathlib.Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--stock", default="portra_400")
+    ap.add_argument("--size", type=int, default=33)
+    ap.add_argument("--out", default=str(HERE.parent / "presets"))
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--compare", action="store_true", help="与现有 presets/*.cube 对比灰阶")
+    a = ap.parse_args()
+
+    if a.list:
+        for k, v in STOCKS.items():
+            print(f"  {k:22s} 负片 {v[0]:20s} 印片 {v[2]}")
+        return
+
+    neg_mod, neg_cls, prt_mod, prt_cls = STOCKS[a.stock]
+    neg = Film(load_film(neg_mod, neg_cls))
+    prt = Film(load_film(prt_mod, prt_cls))
+    print(f"负片 {neg.name} (ISO {neg.iso}) + 印片 {prt.name}")
+
+    lut = build_lut(neg, prt, size=a.size)
+    out = pathlib.Path(a.out) / f"{a.stock}.cube"
+    write_cube(out, lut, f"{neg.name} on {prt.name}")
+    print(f"已写出 {out}  ({a.size}³)")
+
+    if a.compare:
+        old = pathlib.Path(a.out) / f"{a.stock}.cube"
+        print("灰阶对比（输入 0/.18/.5/.82/1 时的 RGB）")
+        step = (a.size - 1)
+        idx = [0, round(0.18 * step), round(0.5 * step), round(0.82 * step), step]
+        for i in idx:
+            c = lut[i, i, i]
+            print(f"  in={i / step:.2f}: ({c[0]:.3f},{c[1]:.3f},{c[2]:.3f})")
+
+
+if __name__ == "__main__":
+    main()
