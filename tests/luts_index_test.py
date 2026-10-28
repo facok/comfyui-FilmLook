@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""`luts/README.md` 必须与目录内容、实测数值完全一致。
+"""`luts/README.md`（本地生成）必须与目录内容、实测数值完全一致。
 
 索引是自动生成的，一旦有人加了/删了/替换了 LUT 却没重新生成，用户就会按过期数据挑文件。
 本测试直接重算一遍并逐字比对——生成是确定性的（同一份 LUT、同一套口径、CPU 采样），
@@ -27,8 +27,14 @@ def check(name, cond, detail=""):
         print(f"  FAIL {name}{(' — ' + detail) if detail else ''}")
 
 
+if not tool.INDEX.is_file():
+    # luts/ 里的绝大多数文件是用户自备、不入库的（.gitignore 只跟踪 6 个 MIT 参考 LUT）。
+    # 索引因此是**本地产物**：没有就跳过，不阻塞干净克隆的测试。
+    print("SKIP 本地未生成 luts/README.md；如需索引请运行 python tools/index_luts.py")
+    sys.exit(0)
+
 rows = tool.collect()
-on_disk = tool.INDEX.read_text(encoding="utf-8") if tool.INDEX.is_file() else ""
+on_disk = tool.INDEX.read_text(encoding="utf-8")
 expected = tool.render(rows)
 
 print(f"[1] 索引存在且覆盖 {len(rows)} 个文件")
