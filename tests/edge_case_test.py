@@ -159,5 +159,21 @@ for tag, call in (
     check(f"{tag}：脏输入得到干净输出", bool(torch.isfinite(out).all()),
           f"range=[{float(out.min()):.3f},{float(out.max()):.3f}]")
 
+print("[9] RGBA 的 alpha 必须原样保留")
+rgba = torch.rand(1, 16, 16, 4, generator=torch.Generator().manual_seed(5))
+alpha = rgba[..., 3:4].clone()
+grade = list(mod.grain_nodes.GRAIN_LEVELS)[2]
+for tag, fn in (
+    ("调色", lambda: mod.FilmLookColor().execute(rgba, "清新人像 (Portra 400)", 1.0, True,
+                                                 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0)[0]),
+    ("镜头", lambda: mod.FilmLookLens().execute(rgba, 0.3, 0.3)[0]),
+    ("光晕", lambda: mod.FilmLookHalation().execute(rgba, 0.5, "标准", True, 0.85)[0]),
+    ("LUT", lambda: mod.FilmLookLUT().execute(rgba, "kodak_vision3_500t.cube", 1.0, "")[0]),
+    ("一键", lambda: mod.FilmLookOneClick().execute(rgba, "清新人像 (Portra 400)", grade, 1.0,
+                                                   0.4, True, 0.5, 1.0, 0.2, 0.2, 0)[0]),
+):
+    out = fn()
+    check(f"{tag}：4 通道且 alpha 不变", out.shape[-1] == 4 and torch.equal(out[..., 3:4], alpha))
+
 print("\n" + ("全部边界测试通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)
