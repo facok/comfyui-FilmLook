@@ -81,7 +81,7 @@
 
 支持两种格式：标准 `.cube`（LUT_1D_SIZE / LUT_3D_SIZE）和 **HaldCLUT `.png`**（8/16-bit RGB，level 自动识别）。
 
-`luts/` 是自带的 LUT 库（默认 125 个 `.cube`，可自由增删），下拉框会自动列出该目录下的全部文件。**这个目录里的文件是用户自行收集的，来源与许可由收集者负责**，与本插件的预设无关；预设用的 6 条 LUT 单独放在 `presets/`，许可见 `presets/LICENSE.md`。
+`luts/` 是自带的 LUT 库（默认 125 个 `.cube`，可自由增删），下拉框会自动列出该目录下的全部文件。**其中大半是 `Essential LUT 07` 这类看不出内容的编号名**——[`luts/README.md`](luts/README.md) 是一份自动生成的索引，把每个 LUT 的冷暖（R−B）、饱和（相对原图倍数）、反差都量了出来，想找「偏冷、低饱和」的直接按数值挑，不用一个个试。**这个目录里的文件是用户自行收集的，来源与许可由收集者负责**，与本插件的预设无关；预设用的 6 条 LUT 单独放在 `presets/`，许可见 `presets/LICENSE.md`。
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
@@ -163,11 +163,12 @@ python tests/preset_character_test.py   # 预设描述与实测性格一致（�
 python tests/grain_test.py              # 颗粒 seed 生效、逐帧/逐通道独立、强度 0 恒等
 python tests/edge_case_test.py          # 极端形状/超大图/参数边界/暗角与光晕几何
 python tests/readme_drift_test.py       # README 参数表与节点真实输入双向一致
+python tests/luts_index_test.py         # luts/README.md 索引与目录、实测数值一致
 python tests/generator_test.py          # LUT 生成器：通道朝向、灰阶单调、写读往返
 python tests/audit_quality.py           # 性能、显存、极端输入（需 CUDA）
 ```
 
-`tools/gen_film_luts.py` 是离线工具，不参与运行时；它的状态见文件头部的说明。
+`tools/` 下是离线工具，不参与运行时：`gen_film_luts.py`（从胶片数据手册生成 LUT，实验性，状态见文件头）、`index_luts.py`（重新生成 `luts/README.md` 索引）。
 
 ## 许可
 
