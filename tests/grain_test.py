@@ -112,6 +112,11 @@ check("film color strength=0（黑白预设）",
 check("film color strength=0（彩色预设）",
       torch.equal(mod.film_core.apply_film_color(img, mod.film_stocks.preset_entry("清新人像 (Portra 400)"),
                                                  strength=0.0), img))
+check("光晕 strength=0", torch.equal(mod.film_core.apply_halation(img, strength=0.0), img))
+check("镜头节点全 0（柔光+暗角）",
+      torch.equal(mod.FilmLookLens().execute(img, 0.0, 0.0)[0], img))
+check("LUT 节点 strength=0",
+      torch.equal(mod.FilmLookLUT().execute(img, "kodak_vision3_500t.cube", 0.0, "")[0], img))
 
 if HAS_SG:
     print("[6] strength 单调：颗粒幅度随强度递增")
