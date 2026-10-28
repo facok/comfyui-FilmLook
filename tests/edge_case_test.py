@@ -141,5 +141,23 @@ if src.is_file():
     check("文件改动后缓存失效", fc.parse_cube(str(tmp_cube))["size"] == 2,
           f"size {first['size']} → 2")
 
+print("[8] 入口清洗：上游的 NaN/Inf 不得污染整幅输出")
+dirty = torch.rand(1, 32, 32, 3, generator=torch.Generator().manual_seed(3))
+dirty[0, 5, 5, 1] = float("nan")
+dirty[0, 7, 7, 0] = float("inf")
+dirty[0, 9, 9, 2] = float("-inf")
+check("清洗后全为有限值", bool(torch.isfinite(fc.sanitize(dirty)).all()))
+clean = torch.rand(1, 16, 16, 3, generator=torch.Generator().manual_seed(4))
+check("清洗对有限值恒等", torch.equal(fc.sanitize(clean), clean))
+for tag, call in (
+    ("调色", lambda: mod.FilmLookColor().execute(dirty, "清新人像 (Portra 400)", 1.0, True,
+                                                 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0)[0]),
+    ("镜头", lambda: mod.FilmLookLens().execute(dirty, 0.3, 0.3)[0]),
+    ("光晕", lambda: mod.FilmLookHalation().execute(dirty, 0.5, "标准", True, 0.85)[0]),
+):
+    out = call()
+    check(f"{tag}：脏输入得到干净输出", bool(torch.isfinite(out).all()),
+          f"range=[{float(out.min()):.3f},{float(out.max()):.3f}]")
+
 print("\n" + ("全部边界测试通过。" if not FAILED else f"失败 {len(FAILED)} 项：{FAILED}"))
 sys.exit(1 if FAILED else 0)

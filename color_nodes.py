@@ -46,6 +46,7 @@ class FilmLookColor:
 
     def execute(self, image, preset, strength, auto_exposure, brightness, contrast,
                 saturation, temperature, tint, preserve_luminance, style_boost):
+        image = film_core.sanitize(image)
         out = film_core.apply_film_color(
             image, preset_entry(preset), strength=strength, auto_exposure=auto_exposure,
             brightness=brightness, contrast=contrast, saturation=saturation,
@@ -95,6 +96,7 @@ class FilmLookLUT:
     CATEGORY = "FilmLook/色彩"
 
     def execute(self, image, lut, strength, custom_path=""):
+        image = film_core.sanitize(image)
         if lut == CUSTOM_PATH_ENTRY:
             path = (custom_path or "").strip().strip('"')
             if not path:

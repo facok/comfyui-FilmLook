@@ -19,6 +19,16 @@ def _luma_w(device, dtype):
     return torch.tensor(_LUMA, device=device, dtype=dtype).view(1, 1, 1, 3)
 
 
+def sanitize(image):
+    """入口清洗：NaN→0、+inf→1、-inf→0。对有限值完全恒等，正常路径无副作用。
+
+    为什么需要：上游节点偶发一个 NaN 像素（VAE 解码、除零、mask 广播出错）时，
+    三线性插值和后面的高斯模糊会把这一点污染扩散到**整幅图**，用户看到的是全黑/全白
+    却完全不知道问题出在上游。在入口挡一次，代价是一次逐元素操作。
+    """
+    return torch.nan_to_num(image.float(), nan=0.0, posinf=1.0, neginf=0.0)
+
+
 def split_alpha(image):
     if image.shape[-1] == 4:
         return image[..., :3], image[..., 3:4]
@@ -126,6 +136,7 @@ def apply_temp_tint(lin, temperature, tint, amount=0.30):
 def apply_film_color(image, stock, *, strength=0.85, auto_exposure=True, brightness=0.0,
                      contrast=1.0, saturation=1.0, temperature=0.0, tint=0.0,
                      preserve_luminance=0.0, style_boost=1.0):
+    image = sanitize(image)
     """胶片调色主管线：sRGB→线性 → 智能曝光/亮度 → 回显示域 → 查 3D LUT →
     线性域做对比度 / 自然饱和度 / 色温色调 → 回 sRGB → 保留亮度 → 按强度混合。
 
@@ -200,6 +211,7 @@ def _gaussian_blur(x, sigma):
 def apply_halation(image, *, strength=0.5, scales=(0.01, 0.02), auto_threshold=True,
                    threshold=0.85, tint=(1.0, 0.45, 0.2)):
     """高光红橙光晕：线性域亮度阈值(软膝)取高光 → 多尺度高斯模糊 → 染成暖色 → 滤色混合。"""
+    image = sanitize(image)
     if float(strength) <= 0.0:
         return image  # 强度 0 = 原图，同时省掉多尺度模糊的开销
     image = image.float()
@@ -227,6 +239,7 @@ def apply_halation(image, *, strength=0.5, scales=(0.01, 0.02), auto_threshold=T
 
 
 def apply_diffusion(image, *, strength=0.2):
+    image = sanitize(image)
     """柔光（黑柔镜效果）：高光低阈值软膝提取 → 高斯模糊 → 中性滤色叠加。
     与 halation 的区别：不着色、阈值更低、作用更弥散，压低微反差带来柔焦感。"""
     if strength <= 0.0:
@@ -245,6 +258,7 @@ def apply_diffusion(image, *, strength=0.2):
 
 
 def apply_vignette(image, *, strength=0.25):
+    image = sanitize(image)
     """暗角：以画面中心为圆心的径向压暗，线性域乘法，形状固定只需一个强度。"""
     if strength <= 0.0:
         return image

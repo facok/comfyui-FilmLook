@@ -120,6 +120,7 @@ def _render_frame(radius, n_mc, seed, frame_np, mode):
 
 
 def apply_grain(image, grain_level, grain_type, strength, quality, seed, sharpen=0.3):
+    image = film_core.sanitize(image)
     """逐帧渲染物理胶片颗粒。全程 float32（无 8-bit 量化）；颗粒半径按画面尺寸
     相对 1024² 缩放，保证同一档位在不同分辨率下视觉粗细一致。
 
@@ -175,4 +176,5 @@ class FilmLookGrain:
     CATEGORY = "FilmLook/颗粒"
 
     def execute(self, image, grain_level, grain_type, strength, quality, sharpen, seed):
+        image = film_core.sanitize(image)
         return (apply_grain(image, grain_level, grain_type, strength, quality, seed, sharpen),)

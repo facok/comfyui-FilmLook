@@ -41,6 +41,7 @@ class FilmLookOneClick:
 
     def execute(self, image, preset, grain_level, strength, halation_strength,
                 auto_exposure, preserve_luminance, style_boost, diffusion, vignette, seed):
+        image = film_core.sanitize(image)
         out = film_core.apply_film_color(image, preset_entry(preset), strength=strength,
                                          auto_exposure=auto_exposure,
                                          preserve_luminance=preserve_luminance,

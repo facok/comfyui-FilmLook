@@ -21,6 +21,7 @@ class FilmLookLens:
     CATEGORY = "FilmLook/光学"
 
     def execute(self, image, diffusion, vignette):
+        image = film_core.sanitize(image)
         out = film_core.apply_diffusion(image, strength=diffusion)
         out = film_core.apply_vignette(out, strength=vignette)
         return (out,)
