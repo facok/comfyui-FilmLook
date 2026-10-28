@@ -81,11 +81,23 @@ for key, cls in mod.NODE_CLASS_MAPPINGS.items():
           documented == actual,
           f"文档 {documented} / 实际 {actual}")
 
-print("\n[2] README 里不该出现已删除的实现（防止文档滞后）")
+print("\n[2] 每个节点都出现在「节点用法」列表里")
+usage = None
+for i, ln in enumerate(lines):
+    if ln.strip().startswith("## 节点用法"):
+        usage = "\n".join(lines[i:i + 20])
+        break
+check("存在「节点用法」章节", usage is not None)
+if usage:
+    for key, cls in mod.NODE_CLASS_MAPPINGS.items():
+        short = mod.NODE_DISPLAY_NAME_MAPPINGS[key].replace("FilmLook ", "").split(" (")[0]
+        check(f"用法列表提到「{short}」", f"**{short}**" in usage)
+
+print("\n[3] README 里不该出现已删除的实现（防止文档滞后）")
 for stale in ("characteristic_curve", "crosstalk 矩阵", "split_tone", "参数化模型拟合"):
     check(f"未残留「{stale}」", stale not in text)
 
-print("\n[3] 关键事实必须被写明")
+print("\n[4] 关键事实必须被写明")
 for must in ("presets/LICENSE.md", "preset_character_test.py", "冷调电影感"):
     check(f"README 提到 {must}", must in text)
 
