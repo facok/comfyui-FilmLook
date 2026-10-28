@@ -107,10 +107,10 @@ if HAS_SG:
     check("grain strength=0 且彩色模式",
           torch.equal(apply_grain(img, "标准 (ISO 400)", "彩色颗粒 (胶片感更强)", 0.0, "均衡", 0), img))
 check("film color strength=0（黑白预设）",
-      torch.equal(mod.film_core.apply_film_color(img, mod.film_stocks.FILM_STOCKS["黑白纪实 (Tri-X)"],
+      torch.equal(mod.film_core.apply_film_color(img, mod.film_stocks.preset_entry("黑白纪实 (Tri-X)"),
                                                  strength=0.0), img))
 check("film color strength=0（彩色预设）",
-      torch.equal(mod.film_core.apply_film_color(img, mod.film_stocks.FILM_STOCKS["清新人像 (Portra 400)"],
+      torch.equal(mod.film_core.apply_film_color(img, mod.film_stocks.preset_entry("清新人像 (Portra 400)"),
                                                  strength=0.0), img))
 
 if HAS_SG:

@@ -23,7 +23,7 @@ mod = importlib.util.module_from_spec(spec)
 sys.modules["comfyui_FilmLook"] = mod
 spec.loader.exec_module(mod)
 fc = mod.film_core
-STOCK = mod.film_stocks.FILM_STOCKS["清新人像 (Portra 400)"]
+STOCK = mod.film_stocks.preset_entry("清新人像 (Portra 400)")
 FAILED = []
 
 

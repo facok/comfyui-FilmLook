@@ -4,7 +4,7 @@
 import os
 
 from . import film_core
-from .film_stocks import FILM_STOCKS, PRESET_LABELS
+from .film_stocks import PRESET_LABELS, preset_entry
 
 LUTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "luts")
 CUSTOM_PATH_ENTRY = "自定义路径"
@@ -56,7 +56,7 @@ class FilmLookColor:
     def execute(self, image, preset, strength, auto_exposure, brightness, contrast,
                 saturation, temperature, tint, preserve_luminance, style_boost):
         out = film_core.apply_film_color(
-            image, FILM_STOCKS[preset], strength=strength, auto_exposure=auto_exposure,
+            image, preset_entry(preset), strength=strength, auto_exposure=auto_exposure,
             brightness=brightness, contrast=contrast, saturation=saturation,
             temperature=temperature, tint=tint, preserve_luminance=preserve_luminance,
             style_boost=style_boost)

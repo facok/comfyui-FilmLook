@@ -2,7 +2,7 @@
 """一键节点：FilmLookOneClick（调色 + 光晕 + 颗粒一次完成）。"""
 
 from . import film_core
-from .film_stocks import FILM_STOCKS, PRESET_LABELS
+from .film_stocks import PRESET_LABELS, preset_entry
 from .grain_nodes import GRAIN_LEVELS, apply_grain
 from .halation_nodes import RADIUS_PRESETS
 
@@ -41,7 +41,7 @@ class FilmLookOneClick:
 
     def execute(self, image, preset, grain_level, strength, halation_strength,
                 auto_exposure, preserve_luminance, style_boost, diffusion, vignette, seed):
-        out = film_core.apply_film_color(image, FILM_STOCKS[preset], strength=strength,
+        out = film_core.apply_film_color(image, preset_entry(preset), strength=strength,
                                          auto_exposure=auto_exposure,
                                          preserve_luminance=preserve_luminance,
                                          style_boost=style_boost)

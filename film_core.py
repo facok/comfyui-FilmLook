@@ -19,13 +19,6 @@ def _luma_w(device, dtype):
     return torch.tensor(_LUMA, device=device, dtype=dtype).view(1, 1, 1, 3)
 
 
-def _as_tensor(x, ref):
-    # 标定拟合时 stock 字段是可微 tensor，直接保梯度转换；普通数值走 torch.tensor
-    if torch.is_tensor(x):
-        return x.to(device=ref.device, dtype=ref.dtype)
-    return torch.tensor(x, device=ref.device, dtype=ref.dtype)
-
-
 def split_alpha(image):
     if image.shape[-1] == 4:
         return image[..., :3], image[..., 3:4]
@@ -88,66 +81,6 @@ def auto_exposure_gain(lin, target=0.18):
     return torch.minimum(gain, cap).view(-1, 1, 1, 1)
 
 
-def characteristic_curve(lin, toe, shoulder, gamma, pivot=0.18):
-    """对数域分段 S 曲线：x = log2(lin)，pivot(0.18) 为中灰锚点，d = gamma*(x - p)。
-    亮部用 log1p(shoulder*d)/shoulder 软压缩（肩部滚降），暗部用 log1p(toe*|d|)/toe
-    软压缩（趾部）；gamma 即中间调反差，pivot 由构造保证不动。
-
-    肩部按 x=1 处的延拓量归一到 -p，于是 f(1)=1、f(0)=0 无需再做端点归一化——旧实现
-    用"端点归一化 + 幂函数回锚 pivot"，在纯曲线（toe=shoulder=0）下回锚指数恰好是
-    1/gamma，会把中间调斜率精确抵消（实测 gamma 0.75~1.35 与恒等曲线差 1e-7），
-    有肩部时也只剩约 1/4 的调节力。现在黑位只做减法、不做除法缩放，gamma 始终保持作用。
-
-    已知（经评估后保留）：乘性归一让肩部放大系数在 pivot 处不连续，一阶导有跳变
-    （Portra 处对数斜率 1.02→2.05）。折算到 8-bit 输出，相邻差分最大跳变仅 0.22/255，
-    亚 1 个量化级、肉眼不可见。曾改为"对数域加性补偿 + smoothstep 权重"使曲线 C¹ 连续，
-    代价是拟合变差：Gold 的性格可见度 0.031→0.029（跌破 0.030 门槛）、Portra 黑点
-    0.025→0.078（参考 0.033），故保留乘性版本。改此处请一并重跑 calibrate_stocks.py。
-    """
-    view = (1,) * (lin.dim() - 1) + (3,)
-    t = _as_tensor(toe, lin).view(view)
-    s = _as_tensor(shoulder, lin).view(view)
-    g = _as_tensor(gamma, lin).view(view)
-    p = math.log2(pivot)
-
-    def compress(k, v):
-        # log1p 软压缩；k 趋 0 时退化为直线
-        return torch.where(k > 1e-4, torch.log1p(k * v) / k.clamp_min(1e-6), v)
-
-    d = g * (torch.log2(lin.clamp_min(1e-6)) - p)
-    dpos, dneg = d.clamp_min(0.0), (-d).clamp_min(0.0)
-    # 肩部归一：x=1 时软压缩量恰好为 -p，使 f(1) 落在 1.0，且不牵动 pivot
-    hi = compress(s, dpos) * ((-p) / compress(s, (-g * p).clamp_min(1e-6)))
-    lo = compress(t, dneg)
-    f = torch.pow(2.0, p + hi - lo)
-    # 黑位：趾部在 x→0 处会残留一个抬升，减掉它（只减不缩放，pivot 位移 <0.1 档）
-    y0 = torch.pow(2.0, p - compress(t, (-g * (math.log2(1e-6) - p)).clamp_min(1e-6)))
-    return ((f - y0) / (1.0 - y0).clamp_min(1e-6)).clamp(0.0, 1.0)
-
-
-def apply_crosstalk(lin, matrix9):
-    m = _as_tensor(matrix9, lin).view(3, 3)
-    m = m / m.sum(dim=1, keepdim=True).clamp_min(1e-6)  # 行归一化，灰色不失曝光
-    return torch.einsum("bhwc,dc->bhwd", lin, m)
-
-
-def _tint_direction(rgb_srgb, ref):
-    c = srgb_to_linear(_as_tensor(rgb_srgb, ref).view(1, 1, 1, 3))
-    return c / luminance(c).clamp_min(1e-4)
-
-
-def apply_split_tone(lin, shadow_rgb, shadow_amt, highlight_rgb, highlight_amt):
-    if not (torch.is_tensor(shadow_amt) or torch.is_tensor(highlight_amt)):
-        if shadow_amt <= 0.0 and highlight_amt <= 0.0:
-            return lin
-    lum = luminance(lin)
-    out = lin
-    w = (1.0 - smoothstep(0.15, 0.55, lum)) * shadow_amt
-    out = out.lerp(lum * _tint_direction(shadow_rgb, lin), w)
-    w = smoothstep(0.35, 0.85, lum) * highlight_amt
-    out = out.lerp(lum * _tint_direction(highlight_rgb, lin), w)
-    return out
-
 
 def apply_contrast(lin, contrast, pivot=0.18):
     if abs(contrast - 1.0) < 1e-6:
@@ -196,10 +129,15 @@ def apply_temp_tint(lin, temperature, tint, amount=0.30):
 def apply_film_color(image, stock, *, strength=0.85, auto_exposure=True, brightness=0.0,
                      contrast=1.0, saturation=1.0, temperature=0.0, tint=0.0,
                      preserve_luminance=0.0, style_boost=1.0):
-    """胶片调色主管线：sRGB→线性 → 智能曝光 → 亮度 → 特性曲线(+黑位) → 串扰 →
-    (黑白化) → 分离色调 → 对比度 → 自然饱和度 → 色温色调 → 回 sRGB → 按强度混合。
-    preserve_luminance: 0=允许胶片曲线自由改变亮度；1=输出亮度分布完全贴回原图。
-    style_boost: 风格浓度，1=忠实胶片效果，>1 把预设对原图的偏离等比放大（超真实胶片）。"""
+    """胶片调色主管线：sRGB→线性 → 智能曝光/亮度 → 回显示域 → 查 3D LUT →
+    线性域做对比度 / 自然饱和度 / 色温色调 → 回 sRGB → 保留亮度 → 按强度混合。
+
+    stock 需含 "table"（parse_cube 的解析结果，None 表示中性直通）与 "monochrome"。
+    预设即 LUT：不再用参数化模型拟合，因此输出与参考 LUT 逐点一致（见 film_stocks.py）。
+
+    preserve_luminance: 0=允许 LUT 自由改变亮度；1=输出亮度分布完全贴回原图。
+    style_boost: 风格浓度，1=忠实 LUT，>1 把 LUT 对原图的偏离等比放大（超真实胶片）。
+    """
     image = image.float()
     if float(strength) * float(style_boost) <= 0.0:
         # 强度 0 = 原图。黑白预设尤其需要这道闸门：它的混合基准是灰度原图，
@@ -207,26 +145,25 @@ def apply_film_color(image, stock, *, strength=0.85, auto_exposure=True, brightn
         return image
     rgb, alpha = split_alpha(image)
     src = rgb.clamp(0.0, 1.0)
+
+    # 曝光类调整必须在查表之前：LUT 是按"曝光正常"的画面标定的
     lin = srgb_to_linear(src)
     if auto_exposure:
         lin = lin * auto_exposure_gain(lin)
     if abs(brightness) > 1e-6:
         lin = lin * float(2.0 ** brightness)
-    curve = stock["curve"]
-    lin = characteristic_curve(lin, curve["toe"], curve["shoulder"], curve["gamma"])
-    lift = stock.get("black_lift")
-    if lift is not None and (torch.is_tensor(lift) or any(v > 0.0 for v in lift)):
-        lv = _as_tensor(lift, lin).view(1, 1, 1, 3)
-        lin = lv + lin * (1.0 - lv)
-    lin = apply_crosstalk(lin, stock["crosstalk"])
-    if stock.get("monochrome"):
-        lin = luminance(lin).expand_as(lin)
-    st = stock["split_tone"]
-    lin = apply_split_tone(lin, st["shadow"], st["shadow_amt"], st["highlight"], st["highlight_amt"])
-    lin = apply_contrast(lin, contrast)
-    lin = apply_vibrance(lin, saturation * stock.get("sat_scale", 1.0))
-    lin = apply_temp_tint(lin, temperature, tint)
-    out = linear_to_srgb(lin).clamp(0.0, 1.0)
+    work = linear_to_srgb(lin).clamp(0.0, 1.0)
+
+    table = stock.get("table")
+    if table is not None:
+        work = apply_cube(work, table, 1.0)
+
+    # 观感调整在 LUT 之后：它们是"往成片上再加的调色"
+    out_lin = srgb_to_linear(work)
+    out_lin = apply_contrast(out_lin, contrast)
+    out_lin = apply_vibrance(out_lin, saturation)
+    out_lin = apply_temp_tint(out_lin, temperature, tint)
+    out = linear_to_srgb(out_lin).clamp(0.0, 1.0)
     if preserve_luminance > 0.0:
         eps = 1e-4
         ratio = (luminance(src) + eps) / (luminance(out) + eps)

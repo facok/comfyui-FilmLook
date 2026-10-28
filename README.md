@@ -58,17 +58,20 @@
 
 ### 胶片预设速查
 
-6 个胶片预设已经过参考 LUT 标定：参考数据来自 MIT 授权的 [poptechstudio/ai-cinema-studio-engine](https://github.com/poptechstudio/ai-cinema-studio-engine)（其 LUT 由柯达/富士数据手册的光谱特性曲线数学推导）、G'MIC/Pat David 胶片集（经 YahiaAngelo/Film-Luts 分发，CC BY-SA 数据，仅作标定参考）与 dazz-retro-camera（MIT）。拟合时曲线参数做跨通道共享约束，色彩性格主要由串扰矩阵/分离色调/饱和度承载，方法见 `tests/calibrate_stocks.py`。
+**预设就是一条 3D LUT。** 节点把 `.cube` 直接应用到画面，不再用参数化模型去逼近——拟合会丢掉 LUT 的性格：实测用 12 参数模型逼近参考 LUT，765 色板平均偏差 0.04~0.08、95 分位最高 0.25，Vision3 500T 的天空色度被从 0.235 放大到 0.559（2.4 倍）。改为直接查表后，预设输出与参考 LUT 的差异是 1e-7（浮点噪声）。LUT 本体放在 `presets/`，来源与许可（含 CC BY-SA 提示）见 `presets/LICENSE.md`。
 
-| 预设 | 气质 | 适合题材 | 标定参考 |
-|---|---|---|---|
-| 清新人像 (Portra 400) | 低反差、暖调、肤色柔和 | 人像、婚礼、日常 | kodak_portra_400.cube（G'MIC/Pat David 集） |
-| 日系空气感 (Fuji 400H) | 轻盈通透、暗部微青、黑位抬起 | 小清新、街拍 | fuji_400h.cube（G'MIC/Pat David 集） |
-| 暖阳金调 (Kodak Gold) | 金黄暖调、中等反差 | 阳光、旅行、复古 | cpm35_kodak_gold_warm.cube（dazz-retro-camera） |
-| 冷调电影感 (Vision3 500T) | 青橙对比、冷调暗部 | 夜景、都市、电影感 | kodak_vision3_500t.cube |
-| 浓郁鲜艳 (Ektar) | 高饱和、高反差 | 风光、静物 | Neg_Kodak_Ektar_100.cube |
-| 黑白纪实 (Tri-X) | 高反差黑白、灰轴中性 | 纪实、街拍、特写 | BW_Kodak_TriX_400.cube |
-| 自定义 | 中性基础曲线 | 只用手动参数自己调 | （未参与标定） |
+| 预设 | LUT 文件 | 风格来源 |
+|---|---|---|
+| 清新人像 (Portra 400) | `presets/portra_400.cube` | G'MIC / Pat David 胶片集（CC BY-SA） |
+| 日系空气感 (Fuji 400H) | `presets/fuji_400h.cube` | 同上（CC BY-SA） |
+| 暖阳金调 (Kodak Gold) | `presets/kodak_gold_200_warm.cube` | dazz-retro-camera（MIT） |
+| 冷调电影感 (Vision3 500T) | `presets/vision3_500t.cube` | poptechstudio（MIT） |
+| 浓郁鲜艳 (Ektar) | `presets/ektar_100.cube` | G'MIC（CC BY-SA） |
+| 黑白纪实 (Tri-X) | `presets/trix_400.cube` | G'MIC（CC BY-SA） |
+| 自定义 | 无（直通） | 只响应手动参数 |
+
+> 注意：预设的实际观感以 LUT 为准。部分 LUT 的性格与中文名并不一致（例如 `vision3_500t` 的灰轴实测偏暖 +0.16，是全部预设里最暖的一条，因为 Vision3 500T 是钨丝平衡胶片）。下一版会用胶片数据手册重新生成同名 LUT（见下文「路线图」）。
+
 
 ### FilmLook LUT 应用
 
@@ -132,4 +135,14 @@ A：不会。每一帧都用 `seed` 与帧号派生出的独立种子重新渲�
 
 ## 许可
 
-本插件代码可自由使用与修改；颗粒功能依赖的 silvergrain 为 **AGPLv3** 协议，集成或商用时请注意其传染性条款。`luts/` 目录中 6 个参考 LUT（kodak_vision3_500t / kodak_trix_400_bw / kodak_ektachrome_100d / fuji_eterna_250d / 16mm_reversal_vintage / faded_film_aged）来自 poptechstudio/ai-cinema-studio-engine，**MIT 协议**，作者 PopTech Studio。胶片预设参数由上述参考 LUT 拟合标定，与胶片厂商无关。
+本插件代码可自由使用与修改；颗粒功能依赖的 silvergrain 为 **AGPLv3** 协议，集成或商用时请注意其传染性条款。
+
+`presets/` 下 6 条预设 LUT 的**来源与许可各不相同**（4 条 G'MIC/Pat David 集为 CC BY-SA，2 条 MIT），逐条说明与署名要求见 [`presets/LICENSE.md`](presets/LICENSE.md)。要公开分发本插件，请先确认这 4 条 CC BY-SA 数据是否满足署名与相同方式共享的要求；插件代码本身不受影响。
+
+`luts/` 目录是用户自行收集的 LUT 库，与本插件的预设无关——其来源与许可由收集者负责。胶片预设与任何胶片厂商无关。
+
+## 路线图
+
+- [x] **A**：预设改为直接应用 LUT（已完成）。
+- [ ] **B**：用`spectral_film_lut`（MIT）的**方法论**从胶片数据手册自己生成 LUT，替换现有数据源，使"名称与数据同源"。计划：负片（Portra 400 / Pro 400H / Gold 200 / 5219 / Ektar 100 / Tri-X 400）+ 印片 **Kodak 2383**，走 `特性曲线 → 密度 → 印片 → 投影 → XYZ → LUT` 的完整链路，并与现有 6 条参考 LUT 交叉验证。
+
