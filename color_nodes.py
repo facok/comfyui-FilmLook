@@ -4,21 +4,12 @@
 import os
 
 from . import film_core
-from .film_stocks import PRESET_LABELS, preset_entry
+from .film_stocks import PRESET_LABELS, preset_entry, preset_tooltip
 
 LUTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "luts")
 CUSTOM_PATH_ENTRY = "自定义路径"
 
-_PRESET_TOOLTIP = (
-    "选择胶片风格："
-    "清新人像 (Portra 400)——低反差暖调、肤色柔和，适合人像与日常；"
-    "日系空气感 (Fuji 400H)——轻盈通透、暗部微青，适合小清新与街拍；"
-    "暖阳金调 (Kodak Gold)——金黄暖调，适合阳光、旅行与复古；"
-    "冷调电影感 (Vision3 500T)——青橙对比、冷调暗部，适合夜景与都市；"
-    "浓郁鲜艳 (Ektar)——高饱和高反差，适合风光与静物；"
-    "黑白纪实 (Tri-X)——高反差黑白，适合纪实与特写；"
-    "自定义——中性曲线，只响应下方手动参数"
-)
+_PRESET_TOOLTIP = preset_tooltip()
 
 
 class FilmLookColor:

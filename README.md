@@ -60,17 +60,20 @@
 
 **预设就是一条 3D LUT。** 节点把 `.cube` 直接应用到画面，不再用参数化模型去逼近——拟合会丢掉 LUT 的性格：实测用 12 参数模型逼近参考 LUT，765 色板平均偏差 0.04~0.08、95 分位最高 0.25，Vision3 500T 的天空色度被从 0.235 放大到 0.559（2.4 倍）。改为直接查表后，预设输出与参考 LUT 的差异是 1e-7（浮点噪声）。LUT 本体放在 `presets/`，来源与许可（含 CC BY-SA 提示）见 `presets/LICENSE.md`。
 
-| 预设 | LUT 文件 | 风格来源 |
-|---|---|---|
-| 清新人像 (Portra 400) | `presets/portra_400.cube` | G'MIC / Pat David 胶片集（CC BY-SA） |
-| 日系空气感 (Fuji 400H) | `presets/fuji_400h.cube` | 同上（CC BY-SA） |
-| 暖阳金调 (Kodak Gold) | `presets/kodak_gold_200_warm.cube` | dazz-retro-camera（MIT） |
-| 冷调电影感 (Vision3 500T) | `presets/vision3_500t.cube` | poptechstudio（MIT） |
-| 浓郁鲜艳 (Ektar) | `presets/ektar_100.cube` | G'MIC（CC BY-SA） |
-| 黑白纪实 (Tri-X) | `presets/trix_400.cube` | G'MIC（CC BY-SA） |
-| 自定义 | 无（直通） | 只响应手动参数 |
+下表的「实测性格」不是照胶片名声写的，而是量出来的（`tests/preset_character_test.py` 会把这张表当契约校验，换 LUT 或改管线都会让它失败）：
 
-> 注意：预设的实际观感以 LUT 为准。部分 LUT 的性格与中文名并不一致（例如 `vision3_500t` 的灰轴实测偏暖 +0.16，是全部预设里最暖的一条，因为 Vision3 500T 是钨丝平衡胶片）。下一版会用胶片数据手册重新生成同名 LUT（见下文「路线图」）。
+| 预设 | 实测性格 | 色度/原图 | 暖度 R−B | LUT 文件 | 来源 |
+|---|---|---|---|---|---|
+| 清新人像 (Portra 400) | 低反差、轻微降饱和，色调近中性 | 0.81× | +0.01 | `presets/portra_400.cube` | G'MIC（CC BY-SA） |
+| 日系空气感 (Fuji 400H) | 低饱和、通透，中调偏暖 | 0.77× | +0.07 | `presets/fuji_400h.cube` | G'MIC（CC BY-SA） |
+| 暖阳金调 (Kodak Gold) | 暖调，彩色预设里反差与饱和最高 | 1.06× | +0.04 | `presets/kodak_gold_200_warm.cube` | dazz-retro-camera（MIT） |
+| 冷调电影感 (Vision3 500T) | **偏暖**、中等饱和（钨丝平衡胶片面对 D65 的自然结果） | 0.91× | **+0.16** | `presets/vision3_500t.cube` | poptechstudio（MIT） |
+| 浓郁鲜艳 (Ektar) | 色调中性偏冷，**比原图略淡** | 0.79× | +0.02 | `presets/ektar_100.cube` | G'MIC（CC BY-SA） |
+| 黑白纪实 (Tri-X) | 高反差黑白，灰轴中性 | — | 0.00 | `presets/trix_400.cube` | G'MIC（CC BY-SA） |
+| 自定义 | 不做 LUT 变换 | 1.00× | 0.00 | 无（直通） | — |
+
+> 两条名字与观感明显不符：「冷调电影感」实际是全套最暖的一条，「浓郁鲜艳」实际比原图更淡。原因是这两条 LUT 本身的性格如此（Vision3 500T 是钨丝平衡胶片；`ektar_100` 在肤色/天空上去饱和）。工具里已经在预设下拉框的 tooltip 标出实测性格；彻底解决要靠自产 LUT（见「路线图」），或改名（会破坏已保存的工作流，需你确认）。
+
 
 
 ### FilmLook LUT 应用
@@ -132,6 +135,21 @@ A：确认文件扩展名是 `.cube` 或 `.png`（HaldCLUT）、放在插件的 
 
 **Q：颗粒在视频批次里每帧都一样吗？**
 A：不会。每一帧都用 `seed` 与帧号派生出的独立种子重新渲染（第 N 帧的种子由 `seed` 和 `N` 雪崩混合而来，不是简单相加——silvergrain 的图案对相邻种子只是平移一个 cell，直接相加会得到几乎同一张图），彩色颗粒模式下三个通道也各用独立种子，符合真实胶片颗粒"时间独立"的特性。
+
+## 开发与测试
+
+所有测试都用 ComfyUI 自带的 Python 直接跑（不需要额外依赖）：
+
+```bash
+python tests/smoke_test.py              # 五个节点跑通、形状/值域/NaN
+python tests/param_direction_test.py    # 色温/色调的方向、互反、亮度守恒
+python tests/preset_character_test.py   # 预设描述与实测性格一致（文档即契约）
+python tests/grain_test.py              # 颗粒 seed 生效、逐帧/逐通道独立、强度 0 恒等
+python tests/edge_case_test.py          # 极端形状/超大图/参数边界/暗角与光晕几何
+python tests/audit_quality.py           # 性能、显存、极端输入（需 CUDA）
+```
+
+`tools/gen_film_luts.py` 是离线工具，不参与运行时；它的状态见文件头部的说明。
 
 ## 许可
 

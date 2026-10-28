@@ -2,7 +2,7 @@
 """一键节点：FilmLookOneClick（调色 + 光晕 + 颗粒一次完成）。"""
 
 from . import film_core
-from .film_stocks import PRESET_LABELS, preset_entry
+from .film_stocks import PRESET_LABELS, preset_entry, preset_tooltip
 from .grain_nodes import GRAIN_LEVELS, apply_grain
 from .halation_nodes import RADIUS_PRESETS
 
@@ -13,7 +13,7 @@ class FilmLookOneClick:
         return {"required": {
             "image": ("IMAGE",),
             "preset": (PRESET_LABELS, {"default": PRESET_LABELS[0],
-                                       "tooltip": "选择胶片风格，与“胶片调色”节点相同"}),
+                                       "tooltip": preset_tooltip()}),
             "grain_level": (list(GRAIN_LEVELS.keys()), {"default": "标准 (ISO 400)",
                                                         "tooltip": "颗粒粗细：感光度越高颗粒越粗"}),
             "strength": ("FLOAT", {"default": 0.85, "min": 0.0, "max": 1.0, "step": 0.01,
