@@ -20,22 +20,26 @@ colour-science / scipy / pyqt。完整链路：
 Ektar 高光偏蓝），灰阶严格单调、无 NaN，高光加了软滚降不再硬切顶。但**还不能替换
 `presets/`**，量化差距（Portra 对参考 LUT）：
 
-    765 色板色度均值：本工具 0.314 / 参考 LUT 0.451 / 原图 0.556
-    与参考 LUT 的差异：平均 |Δ| 0.24，95 分位 0.64
+    765 色板色度均值：本工具 sat=1.0 时 0.314 / 参考 LUT 0.451 / 原图 0.556
+    sat=1.45 标定后 0.430、sat=1.5 时 0.453（与参考持平），此时与参考平均 |Δ| 0.27
 
-即生成结果**明显偏灰**。已定位的主要缺口：
+即裸生成结果**明显偏灰**，可用 `--sat` 补回色度；但色相与明暗关系仍与参考 LUT 有差别
+（两条路线不同，见下），所以还不能直接替换 `presets/`。已定位的主要缺口：
 
-- **光谱密度拆分太粗**：参考实现用 `construct_spectral_density` 找密度曲线的局部极值，
-  再用高斯平滑的软掩膜把一条密度曲线拆成 R/G/B 三层；这里用的是 500nm / 600nm 硬切分
-  + 3 点盒式平滑，三层严重重叠 → 通道串扰过大 → 去饱和。这是当前色度偏低的首要原因。
-- **`output_transform` 未完整移植**：参考实现有 OkLab 饱和度调整、2.5D xy LUT 的色域
-  映射、亮度恢复、可选 Reinhard rolloff；这里只有线性投影 + 中灰定标 + 简单滚降。
+- **输入侧谱重建偏灰**：现在用 XYZ 的最小范数谱重建，天然把颜色拉向灰。参考实现用
+  barycentric NNLS 上采样，色彩分离度更高。这是色度偏低的根源，`--sat` 只是标定补偿。
+  曾试过改用"显示原色高斯谱"重建，结果更灰（0.264），已回退。
+- **光谱密度拆分太粗**：参考实现用密度曲线局部极值 + 高斯软掩膜拆 R/G/B 三层；
+  这里是 500/600nm 硬切分 + 3 点盒式平滑。
+- **`output_transform` 未完整移植**：参考实现有 OkLab 饱和度调整、2.5D xy LUT 色域映射、
+  亮度恢复、可选 Reinhard rolloff；这里只有线性投影 + 中灰定标 + 简单滚降。
 - **中灰被过度统一**：色度白平衡把所有预设的中灰拉成同一个值，抹掉了胶片间的色偏差异。
 - **黑白片未接**：Tri-X（负片）+ 2302（印片）走标量密度的另一条链路。
 - 与 `presets/` 里的参考 LUT 路线不同（那 6 条像"负片扫描"，本工具是"负片 + 2383 放映
   拷贝"），不能期望逐点接近，应按"性格是否对"来验收。
 
-下一步优先级：把光谱密度拆分换成极值 + 高斯软掩膜 → 再补 output_transform → 接 BW。
+下一步优先级：移植 barycentric NNLS 上采样（治本）→ 精修光谱密度拆分 → 补 output_transform
+→ 接 BW → 与参考 LUT 做性格验收。
 
 用法（离线，不参与插件运行时）：
     python tools/gen_film_luts.py --list
@@ -216,7 +220,7 @@ def printer_light(neg, prt, kelvin=3200.0):
     return basis @ factors
 
 
-def build_lut(neg, prt, size=33, projector_kelvin=6500, white_balance=True):
+def build_lut(neg, prt, size=33, projector_kelvin=6500, white_balance=True, saturation=1.45):
     """生成 size³ 的 sRGB→sRGB LUT。"""
     xyz2rgb = XYZ2RGB
 
@@ -259,6 +263,14 @@ def build_lut(neg, prt, size=33, projector_kelvin=6500, white_balance=True):
 
     rgb_out = np.clip(xyz_out @ xyz2rgb.T, 0, None)
 
+    # 饱和度标定（对应参考实现的 output_color_transform(sat_adjust=...)）：
+    # 输入侧用的是 XYZ 最小范数谱重建，天然偏灰，实测色度只有参考的 ~70%，
+    # 这里在亮度轴周围线性放大即可补回，不改动色相。
+    if saturation != 1.0:
+        lum = (rgb_out * np.array([0.2126, 0.7152, 0.0722])).sum(axis=-1, keepdims=True)
+        rgb_out = lum + (rgb_out - lum) * saturation
+        rgb_out = np.clip(rgb_out, 0, None)
+
     # 高光软滚降：knee 以上指数逼近 1.0，避免 R 通道在 0.83 左右就硬切顶
     knee = 0.80
     over = np.clip(rgb_out - knee, 0, None)
@@ -287,6 +299,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stock", default="portra_400")
     ap.add_argument("--size", type=int, default=33)
+    ap.add_argument("--sat", type=float, default=1.45,
+                    help="饱和度标定：输入侧用最小范数谱重建会偏灰，1.45 可把 765 色板色度"
+                         "从 0.314 补到约 0.45（参考 LUT 为 0.451）")
     ap.add_argument("--out", default=str(HERE.parent / "presets"))
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--compare", action="store_true", help="与现有 presets/*.cube 对比灰阶")
@@ -302,7 +317,7 @@ def main():
     prt = Film(load_film(prt_mod, prt_cls))
     print(f"负片 {neg.name} (ISO {neg.iso}) + 印片 {prt.name}")
 
-    lut = build_lut(neg, prt, size=a.size)
+    lut = build_lut(neg, prt, size=a.size, saturation=a.sat)
     out = pathlib.Path(a.out) / f"{a.stock}.cube"
     write_cube(out, lut, f"{neg.name} on {prt.name}")
     print(f"已写出 {out}  ({a.size}³)")
